@@ -21,6 +21,11 @@ const ACRES_PER_1000_GOAL = 2.5;
 const CO2_LBS_PER_TREE_YEAR = 48;
 const LBS_PER_METRIC_TON = 2204.62;
 
+const FT_TO_M = 0.3048;
+// Growing-season thresholds (April–September noon sun is ~50–73° high).
+const SUN_FULL_MAX_ANGLE = 30;
+const SUN_PART_MAX_ANGLE = 55;
+
 const Analysis = {
   // Acres of the given features that fall inside the ZIP boundary.
   areaInside(features, zipFeature) {
@@ -107,6 +112,31 @@ const Analysis = {
     if (aqi <= 100) return { label: 'Moderate', tone: 'moderate' };
     if (aqi <= 150) return { label: 'Unhealthy for sensitive groups', tone: 'usg' };
     return { label: 'Unhealthy', tone: 'bad' };
+  },
+
+  // Estimates growing-season sunlight from the buildings around a point. In NYC (40.7°N) the noon
+  // sun is ~73° high at the summer solstice and ~49° at the equinoxes, so a building to the south
+  // that rises higher than that above the horizon keeps the spot in shade through midday.
+  sunlight([lng, lat], buildings) {
+    const pt = turf.point([lng, lat]);
+    const roof = buildings.find(b => { try { return turf.booleanPointInPolygon(pt, b); } catch { return false; } });
+    const baseM = roof ? roof.properties.heightFt * FT_TO_M : 1.5;
+    let worst = { angle: 0, heightFt: 0, dist: 0 };
+    for (const b of buildings) {
+      if (b === roof) continue;
+      const riseM = b.properties.heightFt * FT_TO_M - baseM;
+      if (riseM <= 0) continue;
+      // Only buildings on the southern side (bearing from ESE through S to WSW) block the sun.
+      const bearing = turf.bearing(pt, turf.centroid(b));
+      if (Math.abs(bearing) < 100) continue;
+      let dist;
+      try { dist = turf.pointToPolygonDistance(pt, b, { units: 'meters' }); } catch { continue; }
+      dist = Math.max(2, dist);
+      const angle = (Math.atan(riseM / dist) * 180) / Math.PI;
+      if (angle > worst.angle) worst = { angle, heightFt: b.properties.heightFt, dist };
+    }
+    const level = worst.angle < SUN_FULL_MAX_ANGLE ? 'full' : worst.angle < SUN_PART_MAX_ANGLE ? 'part' : 'shade';
+    return { level, roofHeightFt: roof ? roof.properties.heightFt : null, blocker: worst.angle ? worst : null };
   },
 
   co2TonsPerYear(treeCount) {

@@ -11,6 +11,10 @@ const DATASETS = {
   streetTrees: 'uvpi-gqnh',   // 2015 Street Tree Census (has a zipcode field)
   districts: '5crt-au7u',     // Community District boundaries
   airQuality: 'c3uy-2p5r',    // Air Quality (reported per community district)
+  plantingSpaces: '82zj-84is', // Forestry Planting Spaces (street tree beds, incl. empty ones)
+  busShelters: 't4f2-8md7',   // Bus Stop Shelters
+  pluto: '64uk-42ks',         // PLUTO tax lots (land use 11 = vacant land)
+  buildings: '5zhs-2jue',     // Building footprints with roof heights
 };
 
 async function soql(id, params) {
@@ -21,8 +25,15 @@ async function soql(id, params) {
   return res.json();
 }
 
+// Matches shapes that overlap the box. (Socrata's within_box only matches shapes that
+// fall entirely inside it, which drops large parks that cross the edge.)
 function withinBox(field, [minX, minY, maxX, maxY]) {
-  return `within_box(${field}, ${maxY}, ${minX}, ${minY}, ${maxX})`;
+  return `intersects(${field}, 'POLYGON((${minX} ${minY}, ${maxX} ${minY}, ${maxX} ${maxY}, ${minX} ${maxY}, ${minX} ${minY}))')`;
+}
+
+function circleWkt(center, radiusM) {
+  const ring = turf.circle(center, radiusM / 1000, { steps: 24, units: 'kilometers' }).geometry.coordinates[0];
+  return `POLYGON((${ring.map(([x, y]) => `${x.toFixed(6)} ${y.toFixed(6)}`).join(', ')}))`;
 }
 
 const Data = {
@@ -76,7 +87,7 @@ const Data = {
   async gardens(zip, bbox) {
     const rows = await soql(DATASETS.gardens, {
       $select: 'gardenname,address,status,zipcode,juris,multipolygon,openhrssa,openhrssu',
-      $where: `zipcode='${zip}' OR ${withinBox('multipolygon', bbox)}`,
+      $where: zip ? `zipcode='${zip}' OR ${withinBox('multipolygon', bbox)}` : withinBox('multipolygon', bbox),
       $limit: 500,
     });
     return rows.filter(r => r.multipolygon).map(r => ({
@@ -158,5 +169,76 @@ const Data = {
     const o3 = pick('Ozone', 'Summer mean');
     if (!pm25 && !no2 && !o3) return null;
     return { district: rows[0]?.geo_place_name || `CD ${cd}`, pm25, no2, o3 };
+  },
+
+  // ---------- Site-level queries for the Build Ideas tab ----------
+
+  async emptyTreeBeds([lng, lat], radius = 250) {
+    return soql(DATASETS.plantingSpaces, {
+      $select: 'buildingnumber,streetname,width,length,location',
+      $where: `within_circle(location, ${lat}, ${lng}, ${radius}) AND psstatus='Empty'`,
+      $limit: 300,
+    });
+  },
+
+  // Closest street address, taken from the nearest planting space of any status.
+  async nearestAddress([lng, lat]) {
+    for (const radius of [40, 120]) {
+      const [row] = await soql(DATASETS.plantingSpaces, {
+        $select: 'buildingnumber,streetname,zipcode',
+        $where: `within_circle(location, ${lat}, ${lng}, ${radius}) AND streetname IS NOT NULL`,
+        $limit: 1,
+      });
+      if (row) return row;
+    }
+    return null;
+  },
+
+  async busShelters([lng, lat], radius = 300) {
+    return soql(DATASETS.busShelters, {
+      $select: 'shelter_id,on_street,cross_stre,latitude,longitude',
+      $where: `within_circle(the_geom, ${lat}, ${lng}, ${radius})`,
+      $limit: 100,
+    });
+  },
+
+  // PLUTO stores coordinates as text, so cast them for the box filter.
+  async vacantLots({ zip, center, radiusDeg = 0.004 }) {
+    const where = [`landuse='11'`, `latitude IS NOT NULL`];
+    if (zip) where.push(`zipcode='${zip}'`);
+    if (center) {
+      const [lng, lat] = center;
+      where.push(`latitude::number between ${lat - radiusDeg} and ${lat + radiusDeg}`);
+      where.push(`longitude::number between ${lng - radiusDeg * 1.3} and ${lng + radiusDeg * 1.3}`);
+    }
+    const rows = await soql(DATASETS.pluto, {
+      $select: 'bbl,address,zipcode,lotarea,ownername,ownertype,latitude,longitude',
+      $where: where.join(' AND '),
+      $order: 'lotarea DESC',
+      $limit: 400,
+    });
+    return rows.map(r => ({
+      bbl: String(r.bbl || '').split('.')[0],
+      address: r.address || 'Unaddressed lot',
+      zip: r.zipcode,
+      sqft: Number(r.lotarea) || 0,
+      owner: r.ownername || 'Unknown owner',
+      publicOwner: r.ownertype === 'C' || r.ownertype === 'M' || r.ownertype === 'O',
+      lat: Number(r.latitude),
+      lng: Number(r.longitude),
+    }));
+  },
+
+  async buildingsNear([lng, lat], radius = 90) {
+    const rows = await soql(DATASETS.buildings, {
+      $select: 'height_roof,the_geom',
+      $where: `intersects(the_geom, '${circleWkt([lng, lat], radius)}') AND height_roof IS NOT NULL`,
+      $limit: 400,
+    });
+    return rows.filter(r => r.the_geom).map(r => ({
+      type: 'Feature',
+      properties: { heightFt: Number(r.height_roof) || 0 },
+      geometry: r.the_geom,
+    }));
   },
 };
