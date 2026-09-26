@@ -241,4 +241,87 @@ const Data = {
       geometry: r.the_geom,
     }));
   },
+
+  // ---------- Map overlays ----------
+
+  // Community districts overlapping the box, joined with their latest annual PM2.5 and NO2.
+  async airQualityDistricts(bbox) {
+    const [districts, readings] = await Promise.all([
+      soql(DATASETS.districts, { $select: 'boro_cd,the_geom', $where: withinBox('the_geom', bbox), $limit: 100 }),
+      soql(DATASETS.airQuality, {
+        $select: 'name,geo_join_id,geo_place_name,time_period,data_value',
+        $where: `geo_type_name='CD' AND measure='Annual mean' AND (name like 'Fine particles%' OR name like 'Nitrogen dioxide%')`,
+        $order: 'start_date DESC',
+        $limit: 5000,
+      }),
+    ]);
+    const latest = {};
+    for (const r of readings) {
+      const key = `${r.geo_join_id}|${r.name.startsWith('Fine') ? 'pm25' : 'no2'}`;
+      if (!latest[key]) latest[key] = r;
+    }
+    return districts.filter(d => d.the_geom).map(d => {
+      const pm = latest[`${d.boro_cd}|pm25`];
+      const no2 = latest[`${d.boro_cd}|no2`];
+      return {
+        type: 'Feature',
+        properties: {
+          cd: d.boro_cd,
+          name: pm?.geo_place_name || `Community District ${d.boro_cd}`,
+          pm25: pm ? Number(pm.data_value) : null,
+          no2: no2 ? Number(no2.data_value) : null,
+          period: pm?.time_period || null,
+        },
+        geometry: d.the_geom,
+      };
+    });
+  },
+
+  // ZIP (MODZCTA) polygons overlapping the box, with median household income from the
+  // Census ACS 5-year survey via Census Reporter (no API key needed).
+  async incomeAreas(bbox) {
+    const rows = await soql(DATASETS.zips, {
+      $select: 'modzcta,pop_est,the_geom',
+      $where: withinBox('the_geom', bbox),
+      $limit: 200,
+    });
+    const zips = rows.map(r => r.modzcta).filter(z => /^\d{5}$/.test(z));
+    const income = await this.medianIncome(zips);
+    return rows.filter(r => r.the_geom).map(r => ({
+      type: 'Feature',
+      properties: { zip: r.modzcta, population: Number(r.pop_est) || 0, ...(income.values[r.modzcta] || {}), release: income.release },
+      geometry: r.the_geom,
+    }));
+  },
+
+  // Census Reporter rejects a whole request if any ZIP is unknown (e.g. NYC's placeholder 99999),
+  // so drop placeholders and fall back to small batches if a request still fails.
+  async medianIncome(zips) {
+    zips = [...new Set(zips)].filter(z => /^\d{5}$/.test(z) && z !== '99999');
+    if (!zips.length) return { values: {}, release: null };
+    const fetchBatch = async batch => {
+      const url = `https://api.censusreporter.org/1.0/data/show/latest?table_ids=B19013&geo_ids=${batch.map(z => `86000US${z}`).join(',')}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Census Reporter request failed: ${res.status}`);
+      return res.json();
+    };
+    let results;
+    try {
+      results = [await fetchBatch(zips)];
+    } catch {
+      const batches = [];
+      for (let i = 0; i < zips.length; i += 4) batches.push(zips.slice(i, i + 4));
+      results = (await Promise.allSettled(batches.map(fetchBatch))).filter(r => r.status === 'fulfilled').map(r => r.value);
+    }
+    const values = {};
+    let release = null;
+    for (const json of results) {
+      release = release || json.release?.years || null;
+      for (const [geo, v] of Object.entries(json.data || {})) {
+        const est = v.B19013?.estimate?.B19013001;
+        if (est != null) values[geo.slice(-5)] = { income: est, moe: v.B19013?.error?.B19013001 ?? null };
+      }
+    }
+    return { values, release };
+  },
 };

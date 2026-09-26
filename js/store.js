@@ -1,82 +1,96 @@
-// Community data store: petitions, projects, signatures, volunteers and discussion messages.
-//
-// DEMO MODE: data lives in this browser's localStorage, so other people can't see it.
-// To make it shared, replace the bodies of these async methods with calls to a hosted
-// database (Firebase, Supabase, etc.). The rest of the app only talks to this API.
+// Community data store: petitions, projects, signatures, volunteers and discussion messages,
+// backed by Supabase (tables and access rules in supabase/schema.sql). The rest of the app only
+// talks to this API and works with the plain objects returned by toItem().
 
-const COMMUNITY_KEY = 'gsp-community-v1';
+const ITEM_SELECT = '*, signatures(user_id, name, note, created_at), volunteers(user_id, name, created_at), messages(user_id, name, text, created_at)';
+const ts = iso => Date.parse(iso);
+
+function toItem(r) {
+  return {
+    id: r.id,
+    type: r.type,
+    title: r.title,
+    siteType: r.site_type,
+    zip: r.zip,
+    location: r.location,
+    description: r.description,
+    target: r.target,
+    goal: r.goal,
+    date: r.date,
+    needed: r.needed,
+    lat: r.lat,
+    lng: r.lng,
+    organizer: r.organizer_name || 'A neighbor',
+    organizerId: r.organizer_id,
+    createdAt: ts(r.created_at),
+    signatures: (r.signatures || []).map(s => ({ userId: s.user_id, name: s.name, note: s.note, at: ts(s.created_at) })).sort((a, b) => a.at - b.at),
+    volunteers: (r.volunteers || []).map(v => ({ userId: v.user_id, name: v.name, at: ts(v.created_at) })).sort((a, b) => a.at - b.at),
+    messages: (r.messages || []).map(m => ({ userId: m.user_id, name: m.name, text: m.text, at: ts(m.created_at) })).sort((a, b) => a.at - b.at),
+  };
+}
+
+// Postgres unique-constraint violations mean "already did this".
+function checkError(error, duplicateMessage) {
+  if (!error) return;
+  if (error.code === '23505' && duplicateMessage) throw new Error(duplicateMessage);
+  throw new Error(error.message || 'Something went wrong. Please try again.');
+}
 
 const Store = {
-  shared: false,
-
-  _read() {
-    try {
-      return JSON.parse(localStorage.getItem(COMMUNITY_KEY)) || { items: [], volunteers: [] };
-    } catch {
-      return { items: [], volunteers: [] };
-    }
-  },
-  _write(db) {
-    try { localStorage.setItem(COMMUNITY_KEY, JSON.stringify(db)); } catch {}
-  },
-  _id: prefix => `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-
-  // Petitions and projects for a ZIP, newest first.
-  async listItems(zip) {
-    return this._read().items
-      .filter(i => !zip || i.zip === zip)
-      .sort((a, b) => b.createdAt - a.createdAt);
+  // Petitions and projects, newest first. Pass a ZIP or an array of ZIPs to filter.
+  async listItems(zips) {
+    let q = sb.from('items').select(ITEM_SELECT).order('created_at', { ascending: false }).limit(1000);
+    if (zips != null) q = q.in('zip', [].concat(zips));
+    const { data, error } = await q;
+    checkError(error);
+    return data.map(toItem);
   },
 
   async getItem(id) {
-    return this._read().items.find(i => i.id === id) || null;
+    const { data, error } = await sb.from('items').select(ITEM_SELECT).eq('id', id).maybeSingle();
+    checkError(error);
+    return data ? toItem(data) : null;
   },
 
-  async createItem(fields) {
-    const db = this._read();
-    const item = {
-      id: this._id('i'),
-      createdAt: Date.now(),
-      signatures: [],
-      volunteers: [],
-      messages: [],
-      ...fields,
-    };
-    db.items.push(item);
-    this._write(db);
-    return item;
+  // Organizer id and name are stamped by the database from the logged-in account.
+  async createItem(user, f) {
+    const { data, error } = await sb.from('items').insert({
+      type: f.type, title: f.title, site_type: f.siteType, zip: f.zip, location: f.location,
+      description: f.description, target: f.target, goal: f.goal, date: f.date || null,
+      needed: f.needed, lat: f.lat, lng: f.lng,
+    }).select(ITEM_SELECT).single();
+    checkError(error);
+    return toItem(data);
   },
 
-  async _updateItem(id, fn) {
-    const db = this._read();
-    const item = db.items.find(i => i.id === id);
-    if (!item) throw new Error('Not found');
-    fn(item);
-    this._write(db);
-    return item;
+  async sign(id, user, { note }) {
+    const { error } = await sb.from('signatures').insert({ item_id: id, note: note || null });
+    checkError(error, "You've already signed this petition.");
   },
 
-  async sign(id, { name, note }) {
-    return this._updateItem(id, item => item.signatures.push({ name, note, at: Date.now() }));
+  async joinProject(id, user, { contact }) {
+    const { error } = await sb.from('volunteers').insert({ item_id: id });
+    checkError(error, "You're already signed up for this project.");
+    if (contact) {
+      const res = await sb.from('volunteer_contacts').insert({ item_id: id, contact });
+      if (res.error && res.error.code !== '23505') console.error(res.error);
+    }
   },
 
-  async joinProject(id, { name, contact }) {
-    return this._updateItem(id, item => item.volunteers.push({ name, contact, at: Date.now() }));
+  async leaveProject(id, user) {
+    const { error } = await sb.from('volunteers').delete().eq('item_id', id).eq('user_id', user.id);
+    checkError(error);
+    await sb.from('volunteer_contacts').delete().eq('item_id', id).eq('user_id', user.id);
   },
 
-  async postMessage(id, { name, text }) {
-    return this._updateItem(id, item => item.messages.push({ name, text, at: Date.now() }));
+  async postMessage(id, user, { text }) {
+    const { error } = await sb.from('messages').insert({ item_id: id, text });
+    checkError(error);
   },
 
-  async addVolunteer(fields) {
-    const db = this._read();
-    const v = { id: this._id('v'), createdAt: Date.now(), ...fields };
-    db.volunteers.push(v);
-    this._write(db);
-    return v;
-  },
-
-  async listVolunteers(zip) {
-    return this._read().volunteers.filter(v => !zip || v.zip === zip);
+  // Contact details for a project's volunteers (only returned to the organizer, per the RLS policy).
+  async volunteerContacts(id) {
+    const { data, error } = await sb.from('volunteer_contacts').select('user_id, contact').eq('item_id', id);
+    return error ? [] : data;
   },
 };
