@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NYC Green Space Planner</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ============ Landing ============ -->
+  <section id="landing" class="landing">
+    <div class="landing-card">
+      <div class="brand brand-lg">
+        <img src="assets/logo.svg" alt="" class="brand-icon">
+        <h1>NYC Green Space Planner</h1>
+      </div>
+      <p class="tagline">See every park, garden, street tree and natural area in a neighborhood. Then find the gaps and plan where new green space should go.</p>
+
+      <form id="landing-form" class="zip-form" autocomplete="off">
+        <label for="landing-zip" class="zip-label">Enter your NYC ZIP code</label>
+        <div class="zip-row">
+          <input id="landing-zip" name="zip" inputmode="numeric" pattern="\d{5}" maxlength="5" placeholder="e.g. 10027" required>
+          <button type="submit">Explore</button>
+        </div>
+        <p id="landing-error" class="form-error" role="alert"></p>
+      </form>
+
+      <div class="examples">
+        <span>Try:</span>
+        <button class="chip" data-zip="10027">10027 Harlem</button>
+        <button class="chip" data-zip="11211">11211 Williamsburg</button>
+        <button class="chip" data-zip="10451">10451 South Bronx</button>
+        <button class="chip" data-zip="11375">11375 Forest Hills</button>
+        <button class="chip" data-zip="10301">10301 St. George</button>
+      </div>
+    </div>
+    <footer class="sources">
+      Data: <a href="https://www.nycgovparks.org/about/data" target="_blank" rel="noopener">NYC Parks Open Data</a> ·
+      <a href="https://naturalareasnyc.org/nyc-nature-map/" target="_blank" rel="noopener">NYC Nature Map / Forever Wild</a> ·
+      <a href="https://www.nycgovparks.org/greenthumb" target="_blank" rel="noopener">GreenThumb</a> ·
+      <a href="https://data.cityofnewyork.us/Environment/Air-Quality-and-Health-Impacts/c3uy-2p5r/about_data" target="_blank" rel="noopener">NYC Air Quality</a>
+    </footer>
+  </section>
+
+  <!-- ============ Planner ============ -->
+  <section id="planner" class="planner" hidden>
+    <header class="topbar">
+      <a href="#" id="home-link" class="brand brand-sm">
+        <img src="assets/logo.svg" alt="" class="brand-icon">
+        <span>NYC Green Space Planner</span>
+      </a>
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button type="button" role="tab" class="tab" data-tab="map" aria-selected="true">Map</button>
+        <button type="button" role="tab" class="tab" data-tab="tab2" aria-selected="false">Tab 2</button>
+        <button type="button" role="tab" class="tab" data-tab="tab3" aria-selected="false">Tab 3</button>
+      </nav>
+      <form id="top-form" class="zip-form zip-form-inline" autocomplete="off">
+        <input id="top-zip" inputmode="numeric" pattern="\d{5}" maxlength="5" placeholder="ZIP code" aria-label="ZIP code" required>
+        <button type="submit">Go</button>
+      </form>
+    </header>
+
+    <div class="workspace" data-panel="map" role="tabpanel">
+      <aside class="sidebar" id="sidebar">
+        <div id="profile"></div>
+      </aside>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div id="map-loading" class="map-loading" hidden><span class="spinner"></span><span id="loading-text">Loading…</span></div>
+        <button id="propose-btn" class="propose-btn" type="button">＋ Propose a green space</button>
+      </div>
+    </div>
+
+    <!-- Empty tabs: add content here. -->
+    <div class="tab-panel" data-panel="tab2" role="tabpanel" hidden></div>
+    <div class="tab-panel" data-panel="tab3" role="tabpanel" hidden></div>
+  </section>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/analysis.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

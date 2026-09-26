@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="NYC Green Space Planner">
+  <rect width="64" height="64" rx="16" fill="#1f6f4a"/>
+  <rect x="29" y="38" width="6" height="16" rx="2" fill="#f4efe3"/>
+  <path d="M29 46l-7-5M35 44l6-4" stroke="#f4efe3" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="32" cy="22" r="11" fill="#9ed67a"/>
+  <circle cx="22" cy="31" r="9" fill="#6fbf5a"/>
+  <circle cx="42" cy="31" r="9" fill="#6fbf5a"/>
+  <circle cx="32" cy="34" r="8" fill="#4ea84a"/>
+</svg>
