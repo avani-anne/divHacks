@@ -37,3 +37,4 @@ Link straight to a ZIP with `http://localhost:8000/#zip=10027`.
 - `js/data.js`: NYC Open Data queries
 - `js/analysis.js`: area, walk access, AQI and carbon calculations (Turf.js)
 - `js/app.js`: map (Leaflet), neighborhood profile and proposal tool
+Git 
