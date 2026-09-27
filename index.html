@@ -7,7 +7,7 @@
   <link rel="icon" href="assets/leaf-mascot.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght@9..144,600&family=Pacifico&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght@9..144,600&family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -17,17 +17,28 @@
   <section id="landing" class="landing">
     <div class="landing-card">
       <div class="brand brand-lg">
-        <!-- Logo: a maple leaf with "greenify" in script cutting across it. Inline so it can use the page's Pacifico font. -->
-        <svg class="logo" viewBox="-3300 -2250 6600 4450" aria-hidden="true">
+        <!-- Logo: a tilted maple leaf with "greenify" set in a band cut through it. Inline so it can use the page's script font. -->
+        <svg class="logo" viewBox="-2750 -2550 5500 5000" aria-hidden="true">
           <defs>
-            <linearGradient id="logoLeaf" x1="0" y1="-2000" x2="0" y2="2030" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#8fd46a"/>
-              <stop offset="1" stop-color="#2f8a45"/>
+            <linearGradient id="logoLeaf" x1="0" y1="-2100" x2="0" y2="2100" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#b5e889"/>
+              <stop offset="1" stop-color="#5cbf63"/>
             </linearGradient>
+            <!-- The band cut out of the leaf for the word to sit in. -->
+            <mask id="logoBand" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000">
+              <rect x="-3000" y="-3000" width="6000" height="6000" fill="#fff"/>
+              <rect x="-3000" y="-430" width="6000" height="640" rx="0" fill="#000" transform="rotate(-6)"/>
+            </mask>
           </defs>
-          <path fill="url(#logoLeaf)" stroke="#1f5e36" stroke-width="90" stroke-linejoin="round" d="m-90 2030 45-863a95 95 0 0 0-111-98l-859 151 116-320a65 65 0 0 0-20-73l-941-762 212-99a65 65 0 0 0 34-79l-186-572 542 115a65 65 0 0 0 73-38l105-247 423 454a65 65 0 0 0 111-57l-204-1052 327 189a65 65 0 0 0 91-27l332-652 332 652a65 65 0 0 0 91 27l327-189-204 1052a65 65 0 0 0 111 57l423-454 105 247a65 65 0 0 0 73 38l542-115-186 572a65 65 0 0 0 34 79l212 99-941 762a65 65 0 0 0-20 73l116 320-859-151a95 95 0 0 0-111 98l45 863z"/>
-          <path d="M-60 1900 L-60 -1500 M-60 300 L-1300 -700 M-60 300 L1200 -700 M-60 900 L-1200 700 M-60 900 L1100 700" stroke="#1f5e36" stroke-width="60" stroke-linecap="round" opacity=".35" fill="none"/>
-          <text class="logo-word" x="0" y="520" text-anchor="middle" transform="rotate(-9)">greenify</text>
+          <!-- Soft, rounded maple leaf: a thick same-color stroke with round joins rounds off every tip. -->
+          <g mask="url(#logoBand)">
+            <g transform="rotate(-16)">
+              <path d="m-90 2030 45-863a95 95 0 0 0-111-98l-859 151 116-320a65 65 0 0 0-20-73l-941-762 212-99a65 65 0 0 0 34-79l-186-572 542 115a65 65 0 0 0 73-38l105-247 423 454a65 65 0 0 0 111-57l-204-1052 327 189a65 65 0 0 0 91-27l332-652 332 652a65 65 0 0 0 91 27l327-189-204 1052a65 65 0 0 0 111 57l423-454 105 247a65 65 0 0 0 73 38l542-115-186 572a65 65 0 0 0 34 79l212 99-941 762a65 65 0 0 0-20 73l116 320-859-151a95 95 0 0 0-111 98l45 863z" fill="url(#logoLeaf)" stroke="url(#logoLeaf)" stroke-width="150" stroke-linejoin="round" stroke-linecap="round"/>
+              <path d="M-60 1850 L-60 -1500 M-60 250 L-1350 -720 M-60 250 L1250 -720 M-60 900 L-1250 700 M-60 900 L1150 700" stroke="#fff" stroke-width="60" stroke-linecap="round" opacity=".5" fill="none"/>
+            </g>
+          </g>
+          <!-- "greenify", about the leaf's width, set in the gap -->
+          <text class="logo-word" x="0" y="95" text-anchor="middle" textLength="3200" lengthAdjust="spacingAndGlyphs" transform="rotate(-6)">greenify</text>
         </svg>
         <h1><span class="sr-only">Greenify: </span>NYC Green Space Planner</h1>
       </div>
