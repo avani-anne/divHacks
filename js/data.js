@@ -11,6 +11,11 @@ const DATASETS = {
   streetTrees: 'uvpi-gqnh',   // 2015 Street Tree Census (has a zipcode field)
   districts: '5crt-au7u',     // Community District boundaries
   airQuality: 'c3uy-2p5r',    // Air Quality (reported per community district)
+  plantingSpaces: '82zj-84is', // Forestry Planting Spaces (street tree beds, incl. empty ones)
+  busShelters: 't4f2-8md7',   // Bus Stop Shelters
+  pluto: '64uk-42ks',         // PLUTO tax lots (land use 11 = vacant land)
+  buildings: '5zhs-2jue',     // Building footprints with roof heights
+  facilities: 'ji82-xba5',    // City Planning Facilities Database (schools, senior centers, etc.)
 };
 
 async function soql(id, params) {
@@ -21,8 +26,15 @@ async function soql(id, params) {
   return res.json();
 }
 
+// Matches shapes that overlap the box. (Socrata's within_box only matches shapes that
+// fall entirely inside it, which drops large parks that cross the edge.)
 function withinBox(field, [minX, minY, maxX, maxY]) {
-  return `within_box(${field}, ${maxY}, ${minX}, ${minY}, ${maxX})`;
+  return `intersects(${field}, 'POLYGON((${minX} ${minY}, ${maxX} ${minY}, ${maxX} ${maxY}, ${minX} ${maxY}, ${minX} ${minY}))')`;
+}
+
+function circleWkt(center, radiusM) {
+  const ring = turf.circle(center, radiusM / 1000, { steps: 24, units: 'kilometers' }).geometry.coordinates[0];
+  return `POLYGON((${ring.map(([x, y]) => `${x.toFixed(6)} ${y.toFixed(6)}`).join(', ')}))`;
 }
 
 const Data = {
@@ -39,6 +51,17 @@ const Data = {
       properties: { zip, modzcta: r.modzcta, population: Number(r.pop_est) || 0 },
       geometry: r.the_geom,
     };
+  },
+
+  // The ZIP (MODZCTA) containing a point, or null for water, parkland without a ZIP (99999) or outside NYC.
+  async zipAt([lng, lat]) {
+    const rows = await soql(DATASETS.zips, {
+      $select: 'modzcta',
+      $where: `intersects(the_geom, 'POINT(${lng} ${lat})')`,
+      $limit: 1,
+    });
+    const zip = rows[0]?.modzcta;
+    return zip && /^\d{5}$/.test(zip) && zip !== '99999' ? zip : null;
   },
 
   async parks(bbox) {
@@ -76,7 +99,7 @@ const Data = {
   async gardens(zip, bbox) {
     const rows = await soql(DATASETS.gardens, {
       $select: 'gardenname,address,status,zipcode,juris,multipolygon,openhrssa,openhrssu',
-      $where: `zipcode='${zip}' OR ${withinBox('multipolygon', bbox)}`,
+      $where: zip ? `zipcode='${zip}' OR ${withinBox('multipolygon', bbox)}` : withinBox('multipolygon', bbox),
       $limit: 500,
     });
     return rows.filter(r => r.multipolygon).map(r => ({
@@ -158,5 +181,237 @@ const Data = {
     const o3 = pick('Ozone', 'Summer mean');
     if (!pm25 && !no2 && !o3) return null;
     return { district: rows[0]?.geo_place_name || `CD ${cd}`, pm25, no2, o3 };
+  },
+
+  // ---------- Site-level queries for the Build Ideas tab ----------
+
+  async emptyTreeBeds([lng, lat], radius = 250) {
+    return soql(DATASETS.plantingSpaces, {
+      $select: 'buildingnumber,streetname,width,length,location',
+      $where: `within_circle(location, ${lat}, ${lng}, ${radius}) AND psstatus='Empty'`,
+      $limit: 300,
+    });
+  },
+
+  // Closest street address, taken from the nearest planting space of any status.
+  async nearestAddress([lng, lat]) {
+    for (const radius of [40, 120]) {
+      const [row] = await soql(DATASETS.plantingSpaces, {
+        $select: 'buildingnumber,streetname,zipcode',
+        $where: `within_circle(location, ${lat}, ${lng}, ${radius}) AND streetname IS NOT NULL`,
+        $limit: 1,
+      });
+      if (row) return row;
+    }
+    return null;
+  },
+
+  async busShelters([lng, lat], radius = 300) {
+    return soql(DATASETS.busShelters, {
+      $select: 'shelter_id,on_street,cross_stre,latitude,longitude',
+      $where: `within_circle(the_geom, ${lat}, ${lng}, ${radius})`,
+      $limit: 100,
+    });
+  },
+
+  // PLUTO stores coordinates as text, so cast them for the box filter.
+  async vacantLots({ zip, center, radiusDeg = 0.004 }) {
+    const where = [`landuse='11'`, `latitude IS NOT NULL`];
+    if (zip) where.push(`zipcode='${zip}'`);
+    if (center) {
+      const [lng, lat] = center;
+      where.push(`latitude::number between ${lat - radiusDeg} and ${lat + radiusDeg}`);
+      where.push(`longitude::number between ${lng - radiusDeg * 1.3} and ${lng + radiusDeg * 1.3}`);
+    }
+    const rows = await soql(DATASETS.pluto, {
+      $select: 'bbl,address,zipcode,lotarea,ownername,ownertype,latitude,longitude',
+      $where: where.join(' AND '),
+      $order: 'lotarea DESC',
+      $limit: 400,
+    });
+    return rows.map(r => ({
+      bbl: String(r.bbl || '').split('.')[0],
+      address: r.address || 'Unaddressed lot',
+      zip: r.zipcode,
+      sqft: Number(r.lotarea) || 0,
+      owner: r.ownername || 'Unknown owner',
+      publicOwner: r.ownertype === 'C' || r.ownertype === 'M' || r.ownertype === 'O',
+      lat: Number(r.latitude),
+      lng: Number(r.longitude),
+    }));
+  },
+
+  async buildingsNear([lng, lat], radius = 90) {
+    const rows = await soql(DATASETS.buildings, {
+      $select: 'height_roof,the_geom',
+      $where: `intersects(the_geom, '${circleWkt([lng, lat], radius)}') AND height_roof IS NOT NULL`,
+      $limit: 400,
+    });
+    return rows.filter(r => r.the_geom).map(r => ({
+      type: 'Feature',
+      properties: { heightFt: Number(r.height_roof) || 0 },
+      geometry: r.the_geom,
+    }));
+  },
+
+  // ---------- Map overlays ----------
+
+  // Community districts overlapping the box, joined with their latest annual PM2.5 and NO2.
+  async airQualityDistricts(bbox) {
+    const [districts, readings] = await Promise.all([
+      soql(DATASETS.districts, { $select: 'boro_cd,the_geom', $where: withinBox('the_geom', bbox), $limit: 100 }),
+      soql(DATASETS.airQuality, {
+        $select: 'name,geo_join_id,geo_place_name,time_period,data_value',
+        $where: `geo_type_name='CD' AND measure='Annual mean' AND (name like 'Fine particles%' OR name like 'Nitrogen dioxide%')`,
+        $order: 'start_date DESC',
+        $limit: 5000,
+      }),
+    ]);
+    const latest = {};
+    for (const r of readings) {
+      const key = `${r.geo_join_id}|${r.name.startsWith('Fine') ? 'pm25' : 'no2'}`;
+      if (!latest[key]) latest[key] = r;
+    }
+    return districts.filter(d => d.the_geom).map(d => {
+      const pm = latest[`${d.boro_cd}|pm25`];
+      const no2 = latest[`${d.boro_cd}|no2`];
+      return {
+        type: 'Feature',
+        properties: {
+          cd: d.boro_cd,
+          name: pm?.geo_place_name || `Community District ${d.boro_cd}`,
+          pm25: pm ? Number(pm.data_value) : null,
+          no2: no2 ? Number(no2.data_value) : null,
+          period: pm?.time_period || null,
+        },
+        geometry: d.the_geom,
+      };
+    });
+  },
+
+  // ZIP (MODZCTA) polygons overlapping the box, with median household income from the
+  // Census ACS 5-year survey via Census Reporter (no API key needed).
+  async incomeAreas(bbox) {
+    const rows = await soql(DATASETS.zips, {
+      $select: 'modzcta,pop_est,the_geom',
+      $where: withinBox('the_geom', bbox),
+      $limit: 200,
+    });
+    const zips = rows.map(r => r.modzcta).filter(z => /^\d{5}$/.test(z));
+    const income = await this.medianIncome(zips);
+    return rows.filter(r => r.the_geom).map(r => ({
+      type: 'Feature',
+      properties: { zip: r.modzcta, population: Number(r.pop_est) || 0, ...(income.values[r.modzcta] || {}), release: income.release },
+      geometry: r.the_geom,
+    }));
+  },
+
+  // Census Reporter rejects a whole request if any ZIP is unknown (e.g. NYC's placeholder 99999),
+  // so drop placeholders and fall back to small batches if a request still fails.
+  async medianIncome(zips) {
+    zips = [...new Set(zips)].filter(z => /^\d{5}$/.test(z) && z !== '99999');
+    if (!zips.length) return { values: {}, release: null };
+    const fetchBatch = async batch => {
+      const url = `https://api.censusreporter.org/1.0/data/show/latest?table_ids=B19013&geo_ids=${batch.map(z => `86000US${z}`).join(',')}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Census Reporter request failed: ${res.status}`);
+      return res.json();
+    };
+    let results;
+    try {
+      results = [await fetchBatch(zips)];
+    } catch {
+      const batches = [];
+      for (let i = 0; i < zips.length; i += 4) batches.push(zips.slice(i, i + 4));
+      results = (await Promise.allSettled(batches.map(fetchBatch))).filter(r => r.status === 'fulfilled').map(r => r.value);
+    }
+    const values = {};
+    let release = null;
+    for (const json of results) {
+      release = release || json.release?.years || null;
+      for (const [geo, v] of Object.entries(json.data || {})) {
+        const est = v.B19013?.estimate?.B19013001;
+        if (est != null) values[geo.slice(-5)] = { income: est, moe: v.B19013?.error?.B19013001 ?? null };
+      }
+    }
+    return { values, release };
+  },
+
+  // Street-level photos near a point from KartaView (open, CC BY-SA 4.0, no key). Keeps the
+  // closest photo from each capture sequence so the gallery shows different viewpoints.
+  async streetPhotos([lng, lat], radius = 80) {
+    const url = `https://api.openstreetcam.org/2.0/photo/?lat=${lat}&lng=${lng}&radius=${radius}&itemsPerPage=40&orderBy=distance`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`KartaView request failed: ${res.status}`);
+    const rows = (await res.json()).result?.data || [];
+    const seen = new Set();
+    const photos = [];
+    for (const r of rows) {
+      if (seen.has(r.sequenceId) || !r.fileurlLTh) continue;
+      seen.add(r.sequenceId);
+      photos.push({
+        id: r.id,
+        lat: Number(r.lat), lng: Number(r.lng),
+        heading: r.heading != null ? Number(r.heading) : null,
+        dist: Number(r.distance) || 0,
+        date: r.shotDate || r.dateAdded,
+        thumb: r.fileurlLTh,
+        full: r.fileurlProc || r.fileurlLTh,
+        link: `https://kartaview.org/details/${r.sequenceId}/${r.sequenceIndex}`,
+      });
+      if (photos.length >= 8) break;
+    }
+    return photos;
+  },
+
+  // Potential partner sites in a ZIP from NYC City Planning's Facilities Database. Only
+  // public-facing sites are included: residences (supportive housing) are left out, and the city
+  // does not publish homeless shelter addresses.
+  async partnerSites(zip) {
+    const rows = await soql(DATASETS.facilities, {
+      $select: 'uid,facname,address,zipcode,facgroup,facsubgrp,factype,opname,latitude,longitude',
+      $where: `zipcode='${zip}' AND latitude IS NOT NULL AND (facgroup='SCHOOLS (K-12)' OR facsubgrp='SENIOR SERVICES' OR factype='NURSING HOME'
+        OR factype like '%DROP-IN%' OR factype like 'HOMEBASE%' OR facsubgrp='SOUP KITCHENS AND FOOD PANTRIES')
+        AND factype != 'HOME DELIVERED MEALS'`,
+      $order: 'facname',
+      $limit: 500,
+    });
+    const kindOf = r => r.facgroup === 'SCHOOLS (K-12)' ? 'school'
+      : r.facsubgrp === 'SENIOR SERVICES' || r.factype === 'NURSING HOME' ? 'seniors'
+      : r.facsubgrp === 'SOUP KITCHENS AND FOOD PANTRIES' ? 'food'
+      : 'homeless';
+    return rows.map(r => ({
+      uid: r.uid,
+      name: r.facname,
+      address: r.address,
+      zip: r.zipcode,
+      kind: kindOf(r),
+      type: r.factype,
+      operator: r.opname,
+      lat: Number(r.latitude),
+      lng: Number(r.longitude),
+    }));
+  },
+
+  // Live air quality (updated hourly) from Open-Meteo's air-quality model (CAMS). No key needed.
+  // It's a regional model with cells roughly 10 km across, so it describes the area's air right
+  // now rather than block-by-block differences. Accepts one or many [lng, lat] points.
+  async currentAir(points) {
+    const url = new URL('https://air-quality-api.open-meteo.com/v1/air-quality');
+    url.searchParams.set('latitude', points.map(p => p[1].toFixed(4)).join(','));
+    url.searchParams.set('longitude', points.map(p => p[0].toFixed(4)).join(','));
+    url.searchParams.set('current', 'us_aqi,pm2_5,ozone,nitrogen_dioxide');
+    url.searchParams.set('timezone', 'America/New_York');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo request failed: ${res.status}`);
+    const json = await res.json();
+    return [].concat(json).map((r, i) => ({
+      point: points[i],
+      aqi: r.current?.us_aqi ?? null,
+      pm25: r.current?.pm2_5 ?? null,
+      ozone: r.current?.ozone ?? null,          // µg/m³
+      no2: r.current?.nitrogen_dioxide ?? null, // µg/m³
+      time: r.current?.time || null,            // local time, e.g. 2026-09-26T22:00
+    }));
   },
 };

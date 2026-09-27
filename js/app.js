@@ -15,6 +15,26 @@ const COLORS = {
   proposal: '#7b4fd6',
 };
 
+// Choropleth scales for the overlay layers.
+const AIR_SCALE = {
+  breaks: [6, 6.5, 7, 8],
+  colors: ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000'],
+  labels: ['< 6', '6–6.5', '6.5–7', '7–8', '8+'],
+};
+// EPA AQI colors (softened slightly for the map).
+const AQI_SCALE = {
+  breaks: [51, 101, 151, 201, 301],
+  colors: ['#3fbf5f', '#f2d635', '#f28c28', '#e0413a', '#8f3f97', '#7e0023'],
+  labels: ['0–50 Good', '51–100 Moderate', '101–150 Sensitive', '151–200 Unhealthy', '201–300 Very unhealthy', '301+ Hazardous'],
+};
+const INCOME_SCALE = {
+  breaks: [40000, 60000, 90000, 130000],
+  colors: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
+  labels: ['< $40k', '$40–60k', '$60–90k', '$90–130k', '$130k+'],
+};
+const scaleColor = (scale, v) => (v == null ? '#d9d9d9' : scale.colors[scale.breaks.filter(b => v >= b).length]);
+const money = n => `$${fmt(n)}`;
+
 const PROPOSAL_TYPES = ['Pocket park', 'Community garden', 'Street tree planting', 'Greenway / green street', 'Playground', 'Green roof', 'Rain garden / bioswale'];
 const STORAGE_KEY = 'gsp-proposals-v1';
 const EXPLORE_PARKS = [
@@ -289,51 +309,145 @@ const state = {
   samples: [],
   metrics: null,
   layers: {},
-  visible: { parks: true, natural: true, gardens: true, trees: false, gaps: false },
+  visible: { parks: true, natural: true, gardens: true, trees: false, gaps: false, airnow: false, airquality: false, income: false, view3d: false },
+  pendingOpen: null,
   proposing: false,
   loadToken: 0,
 };
 
-// ---------------- Proposals (saved in this browser) ----------------
+// ---------------- Proposals ----------------
+// New pins are drafts kept in this browser. Pressing Save stores them in the logged-in user's
+// Supabase `proposals` table (private to them). Reads are synchronous from these caches;
+// writes to saved sites go to Supabase in the background.
 
 const Proposals = {
-  all() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { return []; }
+  saved: [],  // the logged-in user's saved sites
+
+  _drafts() {
+    try {
+      // Anything in local storage is a draft (older builds kept saved sites here too).
+      return (JSON.parse(localStorage.getItem(STORAGE_KEY)) || []).map(p => ({ ...p, userId: null }));
+    } catch { return []; }
   },
-  save(list) {
+  _saveDrafts(list) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch {}
   },
+  _isSaved(id) { return this.saved.some(p => p.id === id); },
+
+  all() { return [...this._drafts(), ...this.saved]; },
   forZip(zip) { return this.all().filter(p => p.zip === zip); },
-  add(p) { const list = this.all(); list.push(p); this.save(list); },
-  update(id, patch) { this.save(this.all().map(p => (p.id === id ? { ...p, ...patch } : p))); },
-  remove(id) { this.save(this.all().filter(p => p.id !== id)); },
-  clearZip(zip) { this.save(this.all().filter(p => p.zip !== zip)); },
+  savedBy() { return this.saved; },
+
+  async loadSaved(user) {
+    if (!user) { this.saved = []; return; }
+    const { data, error } = await sb.from('proposals').select('*').order('saved_at', { ascending: false });
+    if (error) { console.error(error); return; }
+    this.saved = data.map(r => ({
+      id: r.id, zip: r.zip, lat: r.lat, lng: r.lng, name: r.name, type: r.type, notes: r.notes,
+      userId: r.user_id, savedAt: Date.parse(r.saved_at),
+    }));
+  },
+
+  add(p) { this._saveDrafts([...this._drafts(), p]); },
+
+  update(id, patch) {
+    if (!this._isSaved(id)) {
+      this._saveDrafts(this._drafts().map(p => (p.id === id ? { ...p, ...patch } : p)));
+      return;
+    }
+    this.saved = this.saved.map(p => (p.id === id ? { ...p, ...patch } : p));
+    const row = {};
+    for (const k of ['lat', 'lng', 'name', 'type', 'notes']) if (k in patch) row[k] = patch[k];
+    sb.from('proposals').update(row).eq('id', id).then(({ error }) => error && toast(`Couldn't save your change: ${error.message}`));
+  },
+
+  remove(id) {
+    if (!this._isSaved(id)) { this._saveDrafts(this._drafts().filter(p => p.id !== id)); return; }
+    this.saved = this.saved.filter(p => p.id !== id);
+    sb.from('proposals').delete().eq('id', id).then(({ error }) => error && toast(`Couldn't delete: ${error.message}`));
+  },
+
+  // Moves a draft into the user's account. Returns the saved site's new id.
+  async saveDraft(id, patch) {
+    const draft = this._drafts().find(p => p.id === id);
+    if (!draft) return id;
+    const p = { ...draft, ...patch };
+    const { data, error } = await sb.from('proposals')
+      .insert({ zip: p.zip, lat: p.lat, lng: p.lng, name: p.name, type: p.type, notes: p.notes || '' })
+      .select().single();
+    if (error) throw new Error(error.message);
+    this._saveDrafts(this._drafts().filter(x => x.id !== id));
+    const saved = { id: data.id, zip: data.zip, lat: data.lat, lng: data.lng, name: data.name, type: data.type, notes: data.notes, userId: data.user_id, savedAt: Date.parse(data.saved_at) };
+    this.saved = [saved, ...this.saved];
+    return saved.id;
+  },
+
+  clearZip(zip) {
+    this._saveDrafts(this._drafts().filter(p => p.zip !== zip));
+    for (const p of this.saved.filter(p => p.zip === zip)) this.remove(p.id);
+  },
 };
 
+function toast(message) {
+  const el = $('#toast');
+  el.textContent = message;
+  el.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { el.hidden = true; }, 5000);
+}
+
 // ---------------- Map ----------------
+
+// Esri basemaps (no API key). We avoid the OpenStreetMap standard style because it draws every
+// NYC street tree as a green dot, which looks like our Street trees layer is always on.
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const ESRI_ATTRIBUTION = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community';
+
+function basemapLayers() {
+  const tile = (path, opts = {}) => L.tileLayer(`${ESRI}/${path}/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, attribution: ESRI_ATTRIBUTION, ...opts });
+  return {
+    Streets: tile('World_Street_Map'),
+    Light: L.layerGroup([tile('Canvas/World_Light_Gray_Base', { maxNativeZoom: 16 }), tile('Canvas/World_Light_Gray_Reference', { maxNativeZoom: 16 })]),
+    Satellite: tile('World_Imagery', { attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }),
+  };
+}
+
+// Adds the default basemap and, optionally, a switcher control.
+function addBasemaps(target, { control = true } = {}) {
+  const layers = basemapLayers();
+  layers.Streets.addTo(target);
+  if (control) L.control.layers(layers, null, { position: 'topright' }).addTo(target);
+  return layers;
+}
 
 let map;
 
 function initMap() {
   if (map) return;
-  map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([40.71, -73.95], 11);
+  // Double-click clears the ZIP selection, so it doesn't zoom here (use +/− or the scroll wheel).
+  map = L.map('map', { zoomControl: false, preferCanvas: true, doubleClickZoom: false }).setView([40.71, -73.95], 11);
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
-  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Imagery &copy; Esri',
-  });
-  L.control.layers({ Map: streets, Satellite: satellite }, null, { position: 'topright' }).addTo(map);
+  addBasemaps(map);
   L.control.scale({ position: 'bottomright', imperial: true, metric: false }).addTo(map);
 
+  map.createPane('choropleth').style.zIndex = 385;
   map.createPane('gaps').style.zIndex = 390;
   map.createPane('mask').style.zIndex = 395;
 
-  map.on('click', e => { if (state.proposing) addProposal(e.latlng); });
+  // Single click outside the current ZIP loads the ZIP there; double click clears the selection.
+  // The single click waits briefly so it can be cancelled if it turns out to be a double click.
+  map.on('click', e => {
+    if (state.proposing) { addProposal(e.latlng); return; }
+    clearTimeout(state.clickTimer);
+    state.clickTimer = setTimeout(() => selectZipAt(e.latlng), 260);
+  });
+  map.on('dblclick', () => {
+    clearTimeout(state.clickTimer);
+    if (!state.proposing) clearZipSelection();
+  });
+  // A click that opened a park/garden/tree popup shouldn't also switch ZIPs.
+  map.on('popupopen', () => { state.popupOpenedAt = Date.now(); });
 }
 
 function clearLayers() {
@@ -429,11 +543,113 @@ function drawGapLayer() {
 
 async function syncLayerVisibility() {
   if (state.visible.trees) await ensureTreeLayer();
-  for (const key of ['parks', 'natural', 'gardens', 'trees', 'gaps']) {
+  if (state.visible.airquality) await ensureAirLayer();
+  if (state.visible.airnow) await ensureAirNowLayer();
+  if (state.visible.income) await ensureIncomeLayer();
+  for (const key of ['parks', 'natural', 'gardens', 'trees', 'gaps', 'airnow', 'airquality', 'income']) {
     const layer = state.layers[key];
     if (!layer) continue;
     if (state.visible[key] && !map.hasLayer(layer)) layer.addTo(map);
     if (!state.visible[key] && map.hasLayer(layer)) map.removeLayer(layer);
+  }
+  if (state.visible.view3d) Map3D.enable();
+  else Map3D.disable();
+}
+
+// Overlays cover a wider area than the ZIP so neighbors can be compared.
+const overlayBbox = () => turf.bbox(turf.buffer(state.zipFeature, 3, { units: 'kilometers' }));
+
+async function ensureAirLayer() {
+  if (state.layers.airquality) return;
+  const token = state.loadToken;
+  setLoading('Loading air quality by district…');
+  try {
+    const districts = await Data.airQualityDistricts(overlayBbox());
+    if (token !== state.loadToken) return;
+    state.layers.airquality = L.geoJSON(turf.featureCollection(districts), {
+      pane: 'choropleth',
+      style: f => ({ color: '#fff', weight: 1, fillColor: scaleColor(AIR_SCALE, f.properties.pm25), fillOpacity: 0.6 }),
+      onEachFeature: (f, layer) => {
+        const p = f.properties;
+        const aqi = p.pm25 != null ? Analysis.pm25ToAqi(p.pm25) : null;
+        popupInsideZip(layer, `<div class="pop"><div class="pop-kicker">Air quality · ${esc(p.period || '')}</div><strong>${esc(p.name)}</strong>
+          ${p.pm25 != null ? `<div>PM2.5: <b>${fmt(p.pm25, 1)}</b> µg/m³ (AQI ~${aqi}, ${Analysis.aqiCategory(aqi).label.toLowerCase()})</div>` : '<div class="muted">No PM2.5 reading</div>'}
+          ${p.no2 != null ? `<div>NO₂: <b>${fmt(p.no2, 1)}</b> ppb</div>` : ''}</div>`);
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    state.visible.airquality = false;
+  } finally {
+    setLoading(null);
+  }
+}
+
+// Area-shading layers cover neighboring ZIPs too. Inside the current ZIP a click shows the
+// layer's details; outside it the click falls through to "load the ZIP here".
+function popupInsideZip(layer, html) {
+  layer.on('click', e => {
+    if (!state.zipFeature || !turf.booleanPointInPolygon(turf.point([e.latlng.lng, e.latlng.lat]), state.zipFeature)) return;
+    L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
+  });
+}
+
+// Live AQI sampled on a grid over the area (one Open-Meteo request for all points).
+async function ensureAirNowLayer() {
+  if (state.layers.airnow) return;
+  const token = state.loadToken;
+  setLoading('Loading live air quality…');
+  try {
+    const [minX, minY, maxX, maxY] = overlayBbox();
+    const step = 0.03;
+    const points = [];
+    for (let x = minX; x < maxX; x += step) for (let y = minY; y < maxY; y += step) points.push([x + step / 2, y + step / 2]);
+    const readings = await Data.currentAir(points.slice(0, 60));
+    if (token !== state.loadToken) return;
+    state.airNowTime = readings[0]?.time;
+    state.layers.airnow = L.layerGroup(readings.filter(r => r.aqi != null).map(r => {
+      const [x, y] = r.point;
+      const cell = L.rectangle([[y - step / 2, x - step / 2], [y + step / 2, x + step / 2]], {
+        pane: 'choropleth', color: '#fff', weight: 0.5, fillColor: scaleColor(AQI_SCALE, r.aqi), fillOpacity: 0.45,
+      });
+      const cat = Analysis.aqiCategory(r.aqi);
+      popupInsideZip(cell, `<div class="pop"><div class="pop-kicker">Air quality now · ${esc(airTime(r.time))}</div><strong>US AQI ${r.aqi}: ${esc(cat.label)}</strong>
+        <div>PM2.5 ${fmt(r.pm25, 1)} · Ozone ${fmt(r.ozone, 0)} · NO₂ ${fmt(r.no2, 1)} <span class="muted">µg/m³</span></div>
+        <div class="muted small">Open-Meteo / CAMS regional model</div></div>`);
+      return cell;
+    }));
+  } catch (err) {
+    console.error(err);
+    state.visible.airnow = false;
+    toast("Couldn't load live air quality right now.");
+  } finally {
+    setLoading(null);
+  }
+}
+
+async function ensureIncomeLayer() {
+  if (state.layers.income) return;
+  const token = state.loadToken;
+  setLoading('Loading median household income…');
+  try {
+    const areas = await Data.incomeAreas(overlayBbox());
+    if (token !== state.loadToken) return;
+    state.incomeRelease = areas[0]?.properties.release;
+    state.layers.income = L.geoJSON(turf.featureCollection(areas), {
+      pane: 'choropleth',
+      style: f => ({ color: '#fff', weight: 1, fillColor: scaleColor(INCOME_SCALE, f.properties.income), fillOpacity: 0.6 }),
+      onEachFeature: (f, layer) => {
+        const p = f.properties;
+        popupInsideZip(layer, `<div class="pop"><div class="pop-kicker">Median household income</div><strong>ZIP ${esc(p.zip)}</strong>
+          ${p.income != null ? `<div><b>${money(p.income)}</b>${p.moe ? ` <span class="muted">± ${money(p.moe)}</span>` : ''}</div>` : '<div class="muted">No estimate</div>'}
+          <div class="muted small">${p.population ? `${fmt(p.population)} residents · ` : ''}Census ACS ${esc(p.release || '5-year')}</div></div>`);
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    state.visible.income = false;
+  } finally {
+    setLoading(null);
   }
 }
 
@@ -445,7 +661,9 @@ async function loadZip(zip) {
   showTab('map');
   initMap();
   $('#top-zip').value = zip;
+  if (StreetView.active) setMapView('map');
   clearLayers();
+  Map3D.reset();
   setProposing(false);
   state.zip = zip;
   state.samples = [];
@@ -458,7 +676,7 @@ async function loadZip(zip) {
     if (token !== state.loadToken) return;
     if (!zipFeature) {
       setLoading(null);
-      $('#profile').innerHTML = `<div class="card error-card"><h2>ZIP ${esc(zip)} not found</h2><p>That doesn't look like a residential NYC ZIP code. Try another, like 10027 or 11211.</p></div>`;
+      $('#profile').innerHTML = `<div class="card error-card"><h2>ZIP ${esc(zip)} not found</h2><p>That doesn't look like a residential NYC ZIP code. Try another, like 10027 or 11211.</p>${zipForm('')}<p class="form-error" data-zip-error></p></div>`;
       return;
     }
     state.zipFeature = zipFeature;
@@ -468,12 +686,14 @@ async function loadZip(zip) {
     const interior = turf.pointOnFeature(zipFeature).geometry.coordinates;
 
     setLoading('Loading parks, gardens, trees and air quality…');
-    const [parks, natural, gardens, trees, cd] = await Promise.all([
+    const [parks, natural, gardens, trees, cd, income, airNow] = await Promise.all([
       Data.parks(bbox),
       Data.naturalAreas(bbox).catch(() => []),
       Data.gardens(zip, bbox).catch(() => []),
       Data.treeSummary(zip).catch(() => null),
       Data.communityDistrict(interior).catch(() => null),
+      Data.medianIncome([zipFeature.properties.modzcta]).catch(() => null),
+      Data.currentAir([interior]).then(r => r[0]).catch(() => null),
     ]);
     const air = await Data.airQuality(cd).catch(() => null);
     if (token !== state.loadToken) return;
@@ -483,6 +703,7 @@ async function loadZip(zip) {
     state.gardens = gardens;
 
     drawBaseLayers();
+    if (state.pendingOpen) { openProposal(state.pendingOpen); state.pendingOpen = null; }
 
     const parksInZip = parks.filter(p => Analysis.isInside(p, zipFeature));
     const gardensInZip = gardens.filter(g =>
@@ -495,6 +716,9 @@ async function loadZip(zip) {
 
     state.metrics = {
       zip, trees, air, population, zipAcres, parkAcres, naturalAcres,
+      income: income?.values[zipFeature.properties.modzcta] || null,
+      airNow,
+      incomeRelease: income?.release || null,
       parkCount: parksInZip.length,
       gardenCount: gardensInZip.length,
       naturalCount: naturalInZip.length,
@@ -533,7 +757,7 @@ function setLoading(text) {
 // ---------------- Profile rendering ----------------
 
 function skeletonProfile(zip) {
-  return `<div class="profile-head"><div class="kicker">Neighborhood profile</div><h2>ZIP ${esc(zip)}</h2><p class="muted">Loading…</p></div>
+  return `<div class="profile-head"><div class="profile-top"><div class="kicker">Neighborhood profile</div>${zipForm(zip)}</div><h2>ZIP ${esc(zip)}</h2><p class="muted">Loading…</p></div>
     <div class="stats">${'<div class="stat skeleton"></div>'.repeat(6)}</div>`;
 }
 
@@ -547,11 +771,15 @@ function renderProfile() {
   const perThousand = m.population ? (m.parkAcres / m.population) * 1000 : null;
   const co2 = t ? Analysis.co2TonsPerYear(t.count) : null;
 
-  let aqiTile = statTile('—', 'Air quality index', 'No data for this district');
-  if (m.air?.pm25) {
+  let aqiTile = statTile('—', 'Air quality now', 'Live reading unavailable');
+  if (m.airNow?.aqi != null) {
+    const cat = Analysis.aqiCategory(m.airNow.aqi);
+    aqiTile = statTile(`<span class="aqi-badge aqi-${cat.tone}">${m.airNow.aqi}</span>`, 'Air quality now', `${cat.label} · as of ${airTime(m.airNow.time)}`,
+      'US AQI right now, updated hourly, from the Open-Meteo / CAMS air-quality model. It covers roughly 10 km areas, so it shows the air across this part of the city, not block by block.');
+  } else if (m.air?.pm25) {
     const aqi = Analysis.pm25ToAqi(m.air.pm25.value);
     const cat = Analysis.aqiCategory(aqi);
-    aqiTile = statTile(`<span class="aqi-badge aqi-${cat.tone}">${aqi}</span>`, 'Air quality index', `${cat.label} · from ${m.air.pm25.period} PM2.5`);
+    aqiTile = statTile(`<span class="aqi-badge aqi-${cat.tone}">${aqi}</span>`, 'Air quality (yearly)', `${cat.label} · ${m.air.pm25.period} average`);
   }
 
   const proposals = Proposals.forZip(m.zip);
@@ -559,9 +787,10 @@ function renderProfile() {
 
   $('#profile').innerHTML = `
     <div class="profile-head">
-      <div class="kicker">Neighborhood profile</div>
+      <div class="profile-top"><div class="kicker">Neighborhood profile</div>${zipForm(m.zip)}</div>
       <h2>ZIP ${esc(m.zip)} <span class="place">${esc(placeName)}</span></h2>
       <p class="muted">${m.population ? `${fmt(m.population)} residents · ` : ''}${fmt(m.zipAcres)} acres${t?.place?.nta ? ` · ${esc(t.place.nta)}` : ''}</p>
+      ${m.income ? `<p class="muted">Median household income <strong class="ink">${money(m.income.income)}</strong> <span class="small">(Census ACS ${esc(m.incomeRelease || '')})</span></p>` : ''}
     </div>
 
     <div class="stats">
@@ -580,6 +809,7 @@ function renderProfile() {
         ${meter('Within a 5-minute walk of a park', m.access.within5, withProposals?.within5)}
         ${withProposals ? proposalImpactNote(proposals.length, m.access, withProposals) : ''}
         <p class="note">Turn on <em>Access gaps</em> below to see where residents are farthest from a park.</p>
+        <p class="note">Tip: click a neighboring area on the map to switch ZIPs, or double-click to clear the selection.</p>
       ` : '<p class="muted"><span class="spinner spinner-sm"></span> Measuring walking distances…</p>'}
       ${perThousand != null ? `
         <div class="goal">
@@ -597,6 +827,13 @@ function renderProfile() {
         ${layerToggle('gardens', COLORS.garden, 'Community gardens', `${fmt(m.gardenCount)} in ZIP`, true)}
         ${layerToggle('trees', COLORS.tree, 'Street trees', t ? `${fmt(t.count)} trees` : '', true)}
         ${layerToggle('gaps', `linear-gradient(90deg, ${COLORS.gap5} 50%, ${COLORS.gap10} 50%)`, 'Access gaps', '5–10 min · 10+ min to a park')}
+        ${layerToggle('airnow', `linear-gradient(90deg, ${AQI_SCALE.colors.slice(0, 4).join(',')})`, 'Air quality now', m.airNow?.aqi != null ? `AQI ${m.airNow.aqi} · live, updated hourly` : 'Live US AQI, updated hourly')}
+        ${state.visible.airnow ? legend(AQI_SCALE, `US AQI as of ${airTime(state.airNowTime || m.airNow?.time)} (regional model, ~10 km)`) : ''}
+        ${layerToggle('airquality', `linear-gradient(90deg, ${AIR_SCALE.colors.join(',')})`, 'Air pollution, yearly average', 'PM2.5 by community district (NYC survey)')}
+        ${state.visible.airquality ? legend(AIR_SCALE, 'PM2.5, µg/m³ annual mean') : ''}
+        ${layerToggle('income', `linear-gradient(90deg, ${INCOME_SCALE.colors.join(',')})`, 'Median income', m.income ? `${money(m.income.income)} in this ZIP` : 'Household income by ZIP')}
+        ${state.visible.income ? legend(INCOME_SCALE, `Median household income, ACS ${state.incomeRelease || m.incomeRelease || ''}`) : ''}
+        ${layerToggle('view3d', 'linear-gradient(160deg, #e8e4da, #9a9388)', '3D view', 'Tilted map with 3D buildings')}
       </div>
     </section>
 
@@ -612,15 +849,28 @@ function renderProfile() {
       <ul class="rank">${t.top.map(s => `<li><span class="cap">${esc(s.name)}</span><strong>${fmt(s.count)}</strong></li>`).join('')}</ul>
     </section>` : ''}
 
-    ${m.air ? `
+    ${m.airNow || m.air ? `
     <section class="card">
       <h3>Air quality</h3>
-      <p class="muted small">${esc(m.air.district)}</p>
-      <dl class="air">
-        ${airRow('Fine particles (PM2.5)', m.air.pm25, 'annual mean')}
-        ${airRow('Nitrogen dioxide (NO₂)', m.air.no2, 'annual mean')}
-        ${airRow('Ozone (O₃)', m.air.o3, 'summer mean')}
-      </dl>
+      ${m.airNow?.aqi != null ? `
+        <div class="air-now">
+          <span class="aqi-badge aqi-${Analysis.aqiCategory(m.airNow.aqi).tone}">${m.airNow.aqi}</span>
+          <div><strong>Right now: ${esc(Analysis.aqiCategory(m.airNow.aqi).label)}</strong><span class="muted small">US AQI as of ${esc(airTime(m.airNow.time))} · updates hourly</span></div>
+        </div>
+        <dl class="air">
+          ${nowRow('Fine particles (PM2.5)', m.airNow.pm25, 'µg/m³')}
+          ${nowRow('Ozone (O₃)', m.airNow.ozone, 'µg/m³')}
+          ${nowRow('Nitrogen dioxide (NO₂)', m.airNow.no2, 'µg/m³')}
+        </dl>
+        <p class="muted small">Live data: Open-Meteo / Copernicus CAMS model (about 10 km areas).</p>` : ''}
+      ${m.air ? `
+        <div class="air-sub">Yearly average for ${esc(m.air.district)}</div>
+        <dl class="air">
+          ${airRow('Fine particles (PM2.5)', m.air.pm25, 'annual mean')}
+          ${airRow('Nitrogen dioxide (NO₂)', m.air.no2, 'annual mean')}
+          ${airRow('Ozone (O₃)', m.air.o3, 'summer mean')}
+        </dl>
+        <p class="muted small">NYC Community Air Survey. This is the best source for comparing neighborhoods.</p>` : ''}
     </section>` : ''}
 
     <section class="card" id="proposals-card"></section>
@@ -640,6 +890,14 @@ function proposalImpactNote(n, before, after) {
     return `<p class="note good-note">Your ${sites} would raise 5-minute park access from ${pct(before.within5)} to <strong>${pct(after.within5)}</strong>.</p>`;
   }
   return `<p class="note">Your ${sites} ${n > 1 ? 'are' : 'is'} in areas that already have park access. Try placing sites in the red and yellow access gaps.</p>`;
+}
+
+// A compact "change ZIP" form, handled by the #sidebar submit listener.
+function zipForm(current) {
+  return `<form class="profile-zip" autocomplete="off" data-zip-form>
+    <input name="zip" inputmode="numeric" pattern="\\d{5}" maxlength="5" placeholder="ZIP" value="${esc(current)}" aria-label="Change ZIP code" required>
+    <button type="submit">Change ZIP</button>
+  </form>`;
 }
 
 function statTile(value, label, sub, info) {
@@ -665,6 +923,24 @@ function layerToggle(key, color, label, sub, dot) {
   </label>`;
 }
 
+function legend(scale, title) {
+  return `<div class="legend"><div class="legend-title">${esc(title)}</div><div class="legend-row">${scale.colors.map((c, i) =>
+    `<span><i style="background:${c}"></i>${esc(scale.labels[i])}</span>`).join('')}</div></div>`;
+}
+
+function nowRow(label, value, unit) {
+  if (value == null) return '';
+  return `<div><dt>${esc(label)}</dt><dd>${fmt(value, 1)} <small>${esc(unit)} · now</small></dd></div>`;
+}
+
+// "2026-09-26T22:00" → "10 PM"
+function airTime(t) {
+  if (!t) return 'the latest hour';
+  const [, hh] = String(t).split('T');
+  const h = Number(hh?.slice(0, 2));
+  return Number.isFinite(h) ? `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}` : t;
+}
+
 function airRow(label, v, measure) {
   if (!v) return '';
   return `<div><dt>${esc(label)}</dt><dd>${fmt(v.value, 1)} <small>${esc(v.unit)} · ${esc(measure)}, ${esc(v.period)}</small></dd></div>`;
@@ -673,6 +949,10 @@ function airRow(label, v, measure) {
 // ---------------- Proposal tool ----------------
 
 function setProposing(on) {
+  if (on && !state.zipFeature) {
+    toast('Pick a ZIP first: click an area on the map or enter a ZIP code.');
+    on = false;
+  }
   state.proposing = on;
   $('#propose-btn').classList.toggle('active', on);
   $('#propose-btn').textContent = on ? 'Click the map to place a site · Esc to stop' : '＋ Propose a green space';
@@ -698,7 +978,7 @@ function addProposal(latlng) {
 }
 
 function proposalMarker(p) {
-  const icon = L.divIcon({ className: 'proposal-pin', html: '<span><i>+</i></span>', iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] });
+  const icon = L.divIcon({ className: `proposal-pin${p.userId ? '' : ' draft'}`, html: '<span><i>+</i></span>', iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] });
   const marker = L.marker([p.lat, p.lng], { icon, draggable: true, zIndexOffset: 1000 });
   marker.proposalId = p.id;
   marker.bindPopup(() => proposalPopup(p.id), { minWidth: 250 });
@@ -728,13 +1008,54 @@ function proposalPopup(id) {
     <textarea class="pf-notes" rows="2" placeholder="Notes (lot owner, size, community input…)">${esc(p.notes)}</textarea>
     <div class="impact impact-${verdict[2]}"><strong>${verdict[0]}</strong>${verdict[1]}</div>
     <div class="muted small">Nearest park: ${esc(nearest.name || '—')} (${Number.isFinite(d) ? `${fmt(d)} m, ~${Math.max(1, Math.round(d / 80))} min walk` : 'none nearby'})</div>
+    <a class="small sv-link" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p.lat},${p.lng}" target="_blank" rel="noopener">See it in Street View ↗</a>
     ${inside ? '' : `<div class="muted small">⚠ Outside ZIP ${esc(state.zip)}</div>`}
+    <div class="pf-save">${p.userId
+      ? '<span class="saved-note">✓ Saved to your account</span>'
+      : '<button class="btn-primary pf-save-btn" type="button">Save</button><span class="muted small">Draft, not saved yet</span>'}</div>
     <div class="pf-actions"><span class="muted small">Drag the pin to move it</span><button class="pf-delete" type="button">Delete</button></div>`;
   el.querySelector('.pf-name').addEventListener('change', e => { Proposals.update(id, { name: e.target.value.trim() || p.name }); renderProposals(); });
   el.querySelector('.pf-type').addEventListener('change', e => { Proposals.update(id, { type: e.target.value }); renderProposals(); });
   el.querySelector('.pf-notes').addEventListener('change', e => Proposals.update(id, { notes: e.target.value }));
   el.querySelector('.pf-delete').addEventListener('click', () => { map.closePopup(); Proposals.remove(id); refreshAfterProposalChange(); });
+  el.querySelector('.pf-save-btn')?.addEventListener('click', () => saveProposal(id));
   return el;
+}
+
+async function saveProposal(id) {
+  const me = await Auth.require('Log in or create an account to save your proposed green spaces.');
+  if (!me) return;
+  // Pick up any edits typed into the popup before it closes.
+  const form = document.querySelector('.proposal-form');
+  const patch = {};
+  if (form) {
+    patch.name = form.querySelector('.pf-name').value.trim() || undefined;
+    patch.type = form.querySelector('.pf-type').value;
+    patch.notes = form.querySelector('.pf-notes').value;
+    if (!patch.name) delete patch.name;
+  }
+  const btn = form?.querySelector('.pf-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const newId = await Proposals.saveDraft(id, patch);
+    refreshAfterProposalChange();
+    AuthUI.renderAccount();
+    openProposal(newId);
+  } catch (err) {
+    toast(`Couldn't save: ${err.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
+// Jump to a saved site from the account menu, loading its ZIP first if needed.
+function goToProposal(zip, id) {
+  if (zip === state.zip && state.layers.proposals) {
+    showTab('map');
+    openProposal(id);
+    return;
+  }
+  state.pendingOpen = id;
+  submitZip(zip, null);
 }
 
 function openProposal(id) {
@@ -744,6 +1065,7 @@ function openProposal(id) {
 
 function refreshAfterProposalChange() {
   renderProposalMarkers();
+  if (Map3D.active) Map3D.syncData();
   if (state.samples.length) drawGapLayer();
   syncLayerVisibility();
   renderProfile();
@@ -762,11 +1084,11 @@ function renderProposals() {
   card.innerHTML = `
     <h3>Your proposed sites</h3>
     ${list.length ? `
-      <ol class="proposal-list">${list.map(p => `<li><button type="button" data-open="${p.id}"><span>${esc(p.name)}</span><small>${esc(p.type)}</small></button></li>`).join('')}</ol>
+      <ol class="proposal-list">${list.map(p => `<li><button type="button" data-open="${p.id}"><span>${esc(p.name)}</span><small>${p.userId ? '<b class="saved-tag">Saved</b>' : '<b class="draft-tag">Draft</b>'} ${esc(p.type)}</small></button></li>`).join('')}</ol>
       <div class="row-actions">
         <button type="button" class="btn-secondary" id="export-btn">Export GeoJSON</button>
         <button type="button" class="btn-link" id="clear-btn">Clear all</button>
-      </div>` : `<p class="muted">Use <strong>＋ Propose a green space</strong> on the map to drop candidate sites. Each one shows its walk-access impact, and the access meters update. Proposals are saved in this browser.</p>`}`;
+      </div>` : `<p class="muted">Use <strong>＋ Propose a green space</strong> on the map to drop candidate sites. Each one shows its walk-access impact, and the access meters update. Press <strong>Save</strong> on a pin to keep it in your account.</p>`}`;
 }
 
 function exportProposals() {
@@ -786,7 +1108,7 @@ function exportProposals() {
 function showLanding() {
   $('#planner').hidden = true;
   $('#landing').hidden = false;
-  document.title = 'NYC Green Space Planner';
+  document.title = 'Greenify NYC';
   $('#landing-zip').focus();
 }
 
@@ -799,23 +1121,76 @@ function showPlanner() {
 function route() {
   const zip = new URLSearchParams(location.hash.slice(1)).get('zip');
   if (zip && /^\d{5}$/.test(zip)) {
-    document.title = `${zip} · NYC Green Space Planner`;
+    document.title = `${zip} · Greenify NYC`;
     loadZip(zip);
+  } else if (location.hash === '#explore') {
+    showOpenMap();
   } else {
     showLanding();
   }
 }
 
+// ---------------- Selecting ZIPs from the map ----------------
+
+async function selectZipAt(latlng) {
+  if (Date.now() - (state.popupOpenedAt || 0) < 500) return;
+  const here = turf.point([latlng.lng, latlng.lat]);
+  if (state.zipFeature && turf.booleanPointInPolygon(here, state.zipFeature)) return;
+  setLoading('Finding the ZIP code here…');
+  let zip = null;
+  try {
+    zip = await Data.zipAt([latlng.lng, latlng.lat]);
+  } catch (err) {
+    console.error(err);
+  }
+  setLoading(null);
+  if (!zip) {
+    toast('No NYC ZIP code here. Click on land within the five boroughs.');
+    return;
+  }
+  submitZip(zip, null);
+}
+
+function clearZipSelection() {
+  if (location.hash === '#explore') return;
+  location.hash = 'explore';
+}
+
+// The map with no ZIP selected: no highlight or neighborhood layers, just the basemap.
+function showOpenMap() {
+  state.loadToken++;          // cancel any ZIP still loading
+  showPlanner();
+  showTab('map');
+  initMap();
+  clearTimeout(state.clickTimer);
+  setProposing(false);
+  if (StreetView.active) setMapView('map');
+  if (state.visible.view3d) { state.visible.view3d = false; Map3D.disable(); }
+  Map3D.reset();
+  clearLayers();
+  map.closePopup();
+  Object.assign(state, { zip: null, zipFeature: null, parks: [], gardens: [], natural: [], samples: [], metrics: null });
+  $('#top-zip').value = '';
+  setLoading(null);
+  document.title = 'Map · Greenify NYC';
+  $('#profile').innerHTML = `
+    <div class="profile-head">
+      <div class="profile-top"><div class="kicker">Map</div>${zipForm('')}</div>
+      <h2>No ZIP selected</h2>
+    </div>
+    <p class="form-error" data-zip-error></p>
+    <div class="card open-map-card">
+      <div class="empty-icon">🗺️</div>
+      <p><strong>Click anywhere on the map</strong> to load that neighborhood's profile, parks and green-space data, or enter a ZIP code above.</p>
+      <p class="muted small">Tip: with a ZIP selected, click a neighboring area to switch to it, or double-click to clear the selection again.</p>
+    </div>`;
+}
+
 function submitZip(value, errorEl) {
   const zip = value.trim();
-  if (!/^\d{5}$/.test(zip)) {
-    if (errorEl) errorEl.textContent = 'Enter a 5-digit ZIP code.';
-    return;
-  }
-  if (!/^1(0[0-4]|1[0-6])\d{2}$/.test(zip)) {
-    if (errorEl) errorEl.textContent = 'That ZIP is outside New York City (NYC ZIPs start with 100–104 or 110–116).';
-    return;
-  }
+  const fail = msg => (errorEl ? (errorEl.textContent = msg) : toast(msg));
+  if (!/^\d{5}$/.test(zip)) return fail('Enter a 5-digit ZIP code.');
+  if (!/^1(0[0-4]|1[0-6])\d{2}$/.test(zip)) return fail('That ZIP is outside New York City (NYC ZIPs start with 100–104 or 110–116).');
   if (errorEl) errorEl.textContent = '';
   if (location.hash === `#zip=${zip}`) route();
   else location.hash = `zip=${zip}`;
@@ -1067,13 +1442,49 @@ explorePanel.addEventListener('pointerup', event => {
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
 $('#propose-btn').addEventListener('click', () => setProposing(!state.proposing));
+// Map / 3D / Street View switch. 3D is the same as the "3D view" checkbox in Map layers;
+// Street View (js/streetview.js) opens Google Street View at the map's center.
+function markMapView(view) {
+  document.querySelectorAll('[data-map-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mapView === view)));
+}
+
+function setMapView(view) {
+  setProposing(false);
+  if (view !== 'street' && StreetView.active) StreetView.disable();
+  $('#streetview').hidden = view !== 'street';
+  if (view === '3d' && !state.zipFeature) { toast('Pick a ZIP first to see it in 3D.'); view = 'map'; }
+  const want3d = view === '3d';
+  if (state.visible.view3d !== want3d) {
+    state.visible.view3d = want3d;
+    syncLayerVisibility();
+    if (state.metrics) renderProfile();
+  }
+  $('#propose-btn').hidden = view !== 'map';
+  markMapView(view);
+  if (view === 'street') StreetView.enable();
+  if (view === 'map') setTimeout(() => map.invalidateSize(), 0);
+}
+
+document.querySelectorAll('[data-map-view]').forEach(b => b.addEventListener('click', () => setMapView(b.dataset.mapView)));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') setProposing(false); });
 
+$('#sidebar').addEventListener('submit', e => {
+  if (!e.target.matches('[data-zip-form]')) return;
+  e.preventDefault();
+  submitZip(e.target.zip.value, $('[data-zip-error]'));
+});
 $('#sidebar').addEventListener('change', e => {
   const key = e.target.dataset?.layer;
   if (!key) return;
   state.visible[key] = e.target.checked;
-  syncLayerVisibility();
+  // Air quality and income both shade whole areas, so show one at a time.
+  // Area-shading layers cover the same ground, so show one at a time.
+  const SHADING = ['airnow', 'airquality', 'income'];
+  if (e.target.checked && SHADING.includes(key)) SHADING.filter(k => k !== key).forEach(k => { state.visible[k] = false; });
+  syncLayerVisibility().then(() => {
+    if (['airnow', 'airquality', 'income'].includes(key)) renderProfile();
+    if (key === 'view3d') $('#propose-btn').hidden = state.visible.view3d;
+  });
 });
 $('#sidebar').addEventListener('click', e => {
   const open = e.target.closest('[data-open]');
@@ -1086,4 +1497,3 @@ $('#sidebar').addEventListener('click', e => {
 });
 
 window.addEventListener('hashchange', route);
-route();
