@@ -12,13 +12,15 @@ NYC Green Space Planner is a static web app (HTML, CSS and vanilla JS) that maps
 ## Architecture
 
 - Plain `<script>` tags, no modules. Load order in `index.html` matters:
-  `data.js → analysis.js → plants.js → supabase-js (CDN) → config.js → store.js → auth.js → map3d.js → streetview.js → app.js → advisor.js → community.js → main.js`.
+  `data.js → analysis.js → plants.js → supabase-js (CDN) → config.js → store.js → auth.js → app.js → map3d.js → advisor.js → community.js → main.js`.
   Top-level `const`s and functions are shared globals across files (e.g. `$`, `esc`, `fmt`, `state`, `COLORS`, `WALK_5_MIN`, `SQM_PER_ACRE`, `titleCase`, `showTab`).
 - `data.js` (`Data`): every network call. Keep queries here, not in UI code.
 - `analysis.js` (`Analysis`): pure geometry and metric calculations using the global `turf`.
 - `app.js`: global `state`, the Leaflet map for the Map tab, the profile, the proposal tool, hash routing (`#zip=NNNNN`) and `showTab()`.
-- `map3d.js` (`Map3D`): 3D view, a MapLibre GL map overlaid on `#map`. MapLibre is lazy-loaded from unpkg. The camera syncs with the Leaflet map when toggled (MapLibre zoom ≈ Leaflet zoom − 1). Call `Map3D.syncData()` after proposals or layer visibility change.
-- `streetview.js` (`StreetView`): optional Google Street View panorama, loaded on demand when a restricted Maps JavaScript API key is configured in `config.js`.
+- Map tab clicks: a single click (delayed ~260 ms so a double-click can cancel it) outside the current ZIP calls `selectZipAt` → `Data.zipAt` → loads that ZIP. A double-click routes to `#explore` (`showOpenMap`: no ZIP selected, plain map). `doubleClickZoom` is off on this map. Routes: `#zip=NNNNN`, `#explore`, or empty (landing).
+- Map tab view switch: `setMapView('map' | '3d' | 'street')` in `app.js`. 3D goes through `state.visible.view3d` (the same as the layer checkbox); Street View is `StreetView` in `js/streetview.js`, which needs `GOOGLE_MAPS_API_KEY` in `config.js`.
+- Branding: the app is "Greenify NYC". The landing logo is inline SVG in `index.html` (so it can use the Dancing Script web font); the mascot/favicon is `assets/leaf-mascot.svg`. Both use the public-domain Flag of Canada maple-leaf path.
+- `map3d.js`: `View3D` class, a MapLibre GL 3D-buildings map overlaid on a Leaflet map. It's lazy-loaded from unpkg, syncs the camera on toggle, and each map supplies its own `layers()` (GeoJSON + paint + optional popup). Instances: `Map3D` (Map tab), `Advisor.view3d`, `Community.grow3d`. Call `.sync()` after data changes. `add3DToggle()` adds the floating 3D/2D button. It relies on its own `ready` flag, because `isStyleLoaded()` stays false while tiles stream in.
 - `auth.js` (`Auth`, `AuthUI`): Supabase Auth plus the `profiles` row, cached in `Auth.user` so `Auth.current()` is synchronous. Handles sign-up (including the "confirm your email" case), login, password reset and profile updates (camelCase fields map to snake_case columns via `PROFILE_COLUMNS`). Use `await Auth.require(reason)` to gate an action. It resolves to the user, or null if the dialog was dismissed.
 - `main.js`: startup (binds the account UI, wires `Auth.onChange`, calls `route()`). Must load last.
 - `advisor.js` (`Advisor`): Build Ideas tab. It has its **own** Leaflet map (`#advisor-map`), created lazily on first show.
