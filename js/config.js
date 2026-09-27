@@ -4,6 +4,7 @@
 
 const SUPABASE_URL = 'https://ugbbkbgdhdtmubvliese.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Ln54NzXb0Xt1W4LgdtuGuQ_8HUmoH5N';
+const GOOGLE_MAPS_API_KEY = '';
 
 // Email links (password reset, sign-up confirmation) come back with details in the URL. Read
 // them before the Supabase client consumes and clears them.

@@ -8,7 +8,6 @@ Auth.onChange(async user => {
   const id = user?.id || null;
   if (id !== lastUserId) {
     lastUserId = id;
-    await Proposals.loadSaved(user);
     if (state.zipFeature) refreshAfterProposalChange();
   }
   Community.onAuthChange(user);
@@ -25,7 +24,6 @@ Auth.init().then(async () => {
   if (AUTH_REDIRECT.error || AUTH_REDIRECT.type) history.replaceState(null, '', location.pathname);
   lastUserId = user?.id || null;
   Community.lastUserId = lastUserId;
-  await Proposals.loadSaved(user);
   await Community.refreshCache();
   if (state.zipFeature) refreshAfterProposalChange();
 });

@@ -61,7 +61,7 @@ class View3D {
         if (!hits.length) this.onClick?.([e.lngLat.lng, e.lngLat.lat]);
       });
       await new Promise(r => this.map.once('load', r));
-      this.ready = true;
+      if (!this.active) return;
       this.styleBuildings();
     } else {
       this.map.resize();
