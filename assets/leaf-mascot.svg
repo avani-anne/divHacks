@@ -9,15 +9,15 @@
   <path fill="url(#leafFill)" stroke="url(#leafFill)" stroke-width="220" stroke-linejoin="round"
     d="m-90 2030 45-863a95 95 0 0 0-111-98l-859 151 116-320a65 65 0 0 0-20-73l-941-762 212-99a65 65 0 0 0 34-79l-186-572 542 115a65 65 0 0 0 73-38l105-247 423 454a65 65 0 0 0 111-57l-204-1052 327 189a65 65 0 0 0 91-27l332-652 332 652a65 65 0 0 0 91 27l327-189-204 1052a65 65 0 0 0 111 57l423-454 105 247a65 65 0 0 0 73 38l542-115-186 572a65 65 0 0 0 34 79l212 99-941 762a65 65 0 0 0-20 73l116 320-859-151a95 95 0 0 0-111 98l45 863z"/>
   <!-- Cheeks -->
-  <ellipse cx="-780" cy="330" rx="190" ry="120" fill="#ff8fa3" opacity=".6"/>
-  <ellipse cx="780" cy="330" rx="190" ry="120" fill="#ff8fa3" opacity=".6"/>
-  <!-- Eyes -->
-  <ellipse cx="-430" cy="-120" rx="300" ry="350" fill="#fff" stroke="#1f5e36" stroke-width="70"/>
-  <ellipse cx="430" cy="-120" rx="300" ry="350" fill="#fff" stroke="#1f5e36" stroke-width="70"/>
-  <circle cx="-390" cy="-70" r="165" fill="#173b24"/>
-  <circle cx="470" cy="-70" r="165" fill="#173b24"/>
-  <circle cx="-330" cy="-140" r="60" fill="#fff"/>
-  <circle cx="530" cy="-140" r="60" fill="#fff"/>
+  <ellipse cx="-720" cy="300" rx="180" ry="115" fill="#ff8fa3" opacity=".55"/>
+  <ellipse cx="720" cy="300" rx="180" ry="115" fill="#ff8fa3" opacity=".55"/>
+  <!-- Eyes: small, round and black, with two sparkles for a friendly look -->
+  <ellipse cx="-440" cy="-40" rx="165" ry="190" fill="#111"/>
+  <ellipse cx="440" cy="-40" rx="165" ry="190" fill="#111"/>
+  <circle cx="-385" cy="-110" r="62" fill="#fff"/>
+  <circle cx="495" cy="-110" r="62" fill="#fff"/>
+  <circle cx="-480" cy="40" r="28" fill="#fff" opacity=".85"/>
+  <circle cx="400" cy="40" r="28" fill="#fff" opacity=".85"/>
   <!-- Smile -->
-  <path d="M-470 420 Q0 900 470 420" fill="none" stroke="#173b24" stroke-width="120" stroke-linecap="round"/>
+  <path d="M-280 360 Q0 640 280 360" fill="none" stroke="#111" stroke-width="105" stroke-linecap="round"/>
 </svg>
