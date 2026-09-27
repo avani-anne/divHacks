@@ -4,5 +4,6 @@
 
 const SUPABASE_URL = 'https://ugbbkbgdhdtmubvliese.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Ln54NzXb0Xt1W4LgdtuGuQ_8HUmoH5N';
+const GOOGLE_MAPS_API_KEY = '';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);

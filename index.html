@@ -76,6 +76,15 @@
       <div class="map-wrap">
         <div id="map"></div>
         <div id="map3d" hidden></div>
+        <div id="streetview" hidden>
+          <div id="streetview-panorama"></div>
+          <div id="streetview-message" class="streetview-message" role="status" hidden></div>
+        </div>
+        <div class="map-view-switch" role="group" aria-label="Map view">
+          <button type="button" data-map-view="map" aria-pressed="true">Map</button>
+          <button type="button" data-map-view="3d" aria-pressed="false">3D</button>
+          <button type="button" data-map-view="street" aria-pressed="false">Street View</button>
+        </div>
         <div id="map-loading" class="map-loading" hidden><span class="spinner"></span><span id="loading-text">Loading…</span></div>
         <button id="propose-btn" class="propose-btn" type="button">＋ Propose a green space</button>
       </div>
@@ -103,8 +112,9 @@
   <script src="js/config.js"></script>
   <script src="js/store.js"></script>
   <script src="js/auth.js"></script>
-  <script src="js/app.js"></script>
   <script src="js/map3d.js"></script>
+  <script src="js/streetview.js"></script>
+  <script src="js/app.js"></script>
   <script src="js/advisor.js"></script>
   <script src="js/community.js"></script>
   <script src="js/main.js"></script>

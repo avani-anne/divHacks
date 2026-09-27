@@ -12,12 +12,13 @@ NYC Green Space Planner is a static web app (HTML, CSS and vanilla JS) that maps
 ## Architecture
 
 - Plain `<script>` tags, no modules. Load order in `index.html` matters:
-  `data.js → analysis.js → plants.js → supabase-js (CDN) → config.js → store.js → auth.js → app.js → map3d.js → advisor.js → community.js → main.js`.
+  `data.js → analysis.js → plants.js → supabase-js (CDN) → config.js → store.js → auth.js → map3d.js → streetview.js → app.js → advisor.js → community.js → main.js`.
   Top-level `const`s and functions are shared globals across files (e.g. `$`, `esc`, `fmt`, `state`, `COLORS`, `WALK_5_MIN`, `SQM_PER_ACRE`, `titleCase`, `showTab`).
 - `data.js` (`Data`): every network call. Keep queries here, not in UI code.
 - `analysis.js` (`Analysis`): pure geometry and metric calculations using the global `turf`.
 - `app.js`: global `state`, the Leaflet map for the Map tab, the profile, the proposal tool, hash routing (`#zip=NNNNN`) and `showTab()`.
 - `map3d.js` (`Map3D`): 3D view, a MapLibre GL map overlaid on `#map`. MapLibre is lazy-loaded from unpkg. The camera syncs with the Leaflet map when toggled (MapLibre zoom ≈ Leaflet zoom − 1). Call `Map3D.syncData()` after proposals or layer visibility change.
+- `streetview.js` (`StreetView`): optional Google Street View panorama, loaded on demand when a restricted Maps JavaScript API key is configured in `config.js`.
 - `auth.js` (`Auth`, `AuthUI`): Supabase Auth plus the `profiles` row, cached in `Auth.user` so `Auth.current()` is synchronous. Handles sign-up (including the "confirm your email" case), login, password reset and profile updates (camelCase fields map to snake_case columns via `PROFILE_COLUMNS`). Use `await Auth.require(reason)` to gate an action. It resolves to the user, or null if the dialog was dismissed.
 - `main.js`: startup (binds the account UI, wires `Auth.onChange`, calls `route()`). Must load last.
 - `advisor.js` (`Advisor`): Build Ideas tab. It has its **own** Leaflet map (`#advisor-map`), created lazily on first show.

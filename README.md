@@ -1,5 +1,4 @@
 # NYC Green Space Planner
-
 A web app for deciding where New York City needs more green space, and helping neighbors make it happen.
 
 Enter an NYC ZIP code to see every park, natural area, community garden and street tree in the neighborhood. The app then shows where residents are farthest from a park, suggests what could be built on a specific spot, and lets the community organize around it.
@@ -56,6 +55,8 @@ Ask *"I want to [goal] using [kind of space] at [this spot]."* The answer includ
 3. Put the project URL and **publishable (anon) key** in [`js/config.js`](js/config.js). Never use the secret or service_role key in the site.
 4. Under **Authentication → URL Configuration**, add the site's address (e.g. `http://localhost:8000` and your hosted URL) so confirmation and password-reset links return to the app.
 5. Optional: turn off **Confirm email** under Authentication → Sign In / Providers → Email so new accounts can log in immediately. Supabase's built-in email is heavily rate-limited, so set up custom SMTP before relying on confirmation emails.
+
+Google Street View is an optional map view. To enable it, add a Google Maps Platform API key to `GOOGLE_MAPS_API_KEY` in [`js/config.js`](js/config.js), enable Maps JavaScript API for the key, and restrict it to the site's allowed referrers. Google may require billing to be enabled.
 
 ## Run it
 
@@ -114,6 +115,7 @@ js/data.js          NYC Open Data queries
 js/analysis.js      Calculations: area, walk access, AQI, carbon, sunlight (Turf.js)
 js/app.js           Map tab, neighborhood profile, overlays, proposals, tabs and routing
 js/map3d.js         3D view (MapLibre GL, loaded on demand)
+js/streetview.js    Optional Google Street View panorama (loaded on demand)
 js/plants.js        Curated NYC plant list and recommender
 js/advisor.js       Build Ideas tab
 js/config.js        Supabase URL and publishable key

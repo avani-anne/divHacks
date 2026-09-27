@@ -44,6 +44,7 @@ const Map3D = {
       });
       this.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
       await new Promise(r => this.map.once('load', r));
+      if (!this.active) return;
       this.styleBuildings();
       this.shownZip = state.zip;
       this.syncData();
