@@ -44,6 +44,7 @@ const Advisor = {
   designerCatalog: [],
   designerItems: [],
   designerPhotoUrl: null,
+  designerSize: 'normal',   // normal | half | full
   draggingDesignerItem: null,
 
   show() {
@@ -60,6 +61,9 @@ const Advisor = {
   },
 
   init() {
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && this.designerSize !== 'normal') this.setDesignerSize('normal');
+    });
     this.map = L.map('advisor-map', { zoomControl: false }).setView([40.73, -73.95], 12);
     L.control.zoom({ position: 'topright' }).addTo(this.map);
     addBasemaps(this.map);
@@ -95,6 +99,7 @@ const Advisor = {
       if (btn.dataset.action === 'designer-add') this.addDesignerPlant(btn.dataset.index);
       if (btn.dataset.action === 'designer-remove') this.removeDesignerPlant(btn.dataset.id);
       if (btn.dataset.action === 'designer-reset') this.resetDesigner();
+      if (btn.dataset.action === 'designer-size') this.setDesignerSize(btn.dataset.size);
       if (btn.dataset.action === 'designer-export') this.exportDesigner();
     });
     panel.addEventListener('pointerdown', e => {
@@ -418,10 +423,18 @@ const Advisor = {
     if (!container) return;
     this.designerCatalog = plants.length ? plants : PLANTS.filter(plant => plant.native).slice(0, 12);
     container.innerHTML = `
-      <section class="garden-designer">
+      <section class="garden-designer${this.designerSize !== 'normal' ? ` designer-${this.designerSize}` : ''}" aria-label="Planting mockup">
         <div class="designer-head">
           <div><h3>Design this planting</h3><p>Photos stay in your browser.</p></div>
-          <button type="button" class="btn-link designer-reset" data-action="designer-reset">Reset</button>
+          <div class="designer-size">
+            ${this.designerSize === 'normal' ? `
+              <button type="button" class="btn-secondary btn-sm" data-action="designer-size" data-size="half" title="Expand to half the screen">⇲ Half screen</button>
+              <button type="button" class="btn-secondary btn-sm" data-action="designer-size" data-size="full" title="Expand to the full screen">⛶ Full screen</button>`
+            : `
+              <button type="button" class="btn-secondary btn-sm" data-action="designer-size" data-size="${this.designerSize === 'half' ? 'full' : 'half'}">${this.designerSize === 'half' ? '⛶ Full screen' : '⇲ Half screen'}</button>
+              <button type="button" class="btn-primary btn-sm" data-action="designer-size" data-size="normal" title="Close (Esc)">✕ Close</button>`}
+            <button type="button" class="btn-link designer-reset" data-action="designer-reset">Reset</button>
+          </div>
         </div>
         <div class="designer-toolbar">
           <label class="btn-secondary designer-upload" for="designer-photo">Upload photo</label>
@@ -446,6 +459,14 @@ const Advisor = {
             </div>`).join('')}
         </div>
       </section>`;
+  },
+
+  // Expand the mockup to half or full screen, or back to its normal spot in the panel.
+  setDesignerSize(size) {
+    this.designerSize = ['half', 'full'].includes(size) ? size : 'normal';
+    document.body.classList.toggle('designer-open', this.designerSize === 'full');
+    this.renderDesigner(this.designerCatalog);
+    if (this.designerSize === 'normal') $('#adv-designer')?.scrollIntoView({ block: 'nearest' });
   },
 
   plantSticker(plant) {

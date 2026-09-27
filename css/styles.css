@@ -888,14 +888,7 @@ a { color: var(--green-700); }
 /* On narrow phones keep the top bar to one row: mascot, ZIP box and login. */
 @media (max-width: 480px) { .brand-sm .wordmark { display: none; } }
 
-/* ---------- Google Street View (Map tab) ---------- */
-#streetview { position: absolute; inset: 0; z-index: 550; background: #e9ece6; }
-#streetview-panorama { position: absolute; inset: 0; }
-.streetview-message {
-  position: absolute; top: 50%; left: 50%; z-index: 1; transform: translate(-50%, -50%);
-  max-width: min(440px, calc(100% - 32px)); padding: 18px 22px; border-radius: 8px;
-  background: #fff; box-shadow: var(--shadow); text-align: center; line-height: 1.5;
-}
+/* ---------- Map / 3D switch ---------- */
 .map-view-switch {
   position: absolute; top: 12px; left: 12px; z-index: 1000; display: flex; gap: 2px;
   padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: #fff; box-shadow: var(--shadow);
@@ -919,3 +912,26 @@ a { color: var(--green-700); }
 .air-now .aqi-badge { font-size: 1.4rem; font-weight: 700; padding: 4px 12px; }
 .air-now div { display: flex; flex-direction: column; }
 .air-sub { font-weight: 700; font-size: .86rem; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* ---------- Planting mockup: half / full screen ---------- */
+.designer-size { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.designer-size .btn-sm { margin: 0; white-space: nowrap; }
+.designer-half, .designer-full {
+  position: fixed; z-index: 1500; margin: 0; padding: 16px 18px; border: 0; background: var(--paper);
+  display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(16, 38, 26, .18); overflow: hidden;
+}
+/* Half screen: the right half of the window, below the top bar, so the answer stays visible. */
+.designer-half { top: 61px; right: 0; bottom: 0; width: 50vw; border-left: 1px solid var(--line); }
+/* Full screen: covers everything, including the top bar. */
+.designer-full { inset: 0; z-index: 2500; }
+body.designer-open { overflow: hidden; }
+.designer-half .designer-gallery, .designer-full .designer-gallery {
+  display: flex; gap: 6px; overflow-x: auto; flex-shrink: 0; padding-bottom: 4px;
+}
+.designer-half .designer-gallery-item, .designer-full .designer-gallery-item { flex: 0 0 96px; }
+.designer-half .designer-stage, .designer-full .designer-stage { flex: 1; aspect-ratio: auto; min-height: 0; }
+.designer-full .designer-sticker-art { font-size: 3.6rem; }
+@media (max-width: 820px) {
+  /* On phones "half screen" means the bottom two thirds. */
+  .designer-half { top: auto; left: 0; width: auto; height: 66vh; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; }
+}

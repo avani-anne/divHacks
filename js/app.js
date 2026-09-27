@@ -661,7 +661,6 @@ async function loadZip(zip) {
   showTab('map');
   initMap();
   $('#top-zip').value = zip;
-  if (StreetView.active) setMapView('map');
   clearLayers();
   Map3D.reset();
   setProposing(false);
@@ -1164,7 +1163,6 @@ function showOpenMap() {
   initMap();
   clearTimeout(state.clickTimer);
   setProposing(false);
-  if (StreetView.active) setMapView('map');
   if (state.visible.view3d) { state.visible.view3d = false; Map3D.disable(); }
   Map3D.reset();
   clearLayers();
@@ -1201,6 +1199,7 @@ $('#top-form').addEventListener('submit', e => { e.preventDefault(); submitZip($
 document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => submitZip(c.dataset.zip, $('#landing-error'))));
 $('#home-link').addEventListener('click', e => { e.preventDefault(); location.hash = ''; });
 function showTab(name) {
+  if (name !== 'build' && Advisor.designerSize !== 'normal') Advisor.setDesignerSize('normal');
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
   document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== name; });
   if (name === 'map' && map) setTimeout(() => map.invalidateSize(), 0);
@@ -1444,16 +1443,13 @@ explorePanel.addEventListener('pointerup', event => {
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
 $('#propose-btn').addEventListener('click', () => setProposing(!state.proposing));
-// Map / 3D / Street View switch. 3D is the same as the "3D view" checkbox in Map layers;
-// Street View (js/streetview.js) opens Google Street View at the map's center.
+// Map / 3D switch. 3D is the same as the "3D view" checkbox in Map layers.
 function markMapView(view) {
   document.querySelectorAll('[data-map-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mapView === view)));
 }
 
 function setMapView(view) {
   setProposing(false);
-  if (view !== 'street' && StreetView.active) StreetView.disable();
-  $('#streetview').hidden = view !== 'street';
   if (view === '3d' && !state.zipFeature) { toast('Pick a ZIP first to see it in 3D.'); view = 'map'; }
   const want3d = view === '3d';
   if (state.visible.view3d !== want3d) {
@@ -1463,7 +1459,6 @@ function setMapView(view) {
   }
   $('#propose-btn').hidden = view !== 'map';
   markMapView(view);
-  if (view === 'street') StreetView.enable();
   if (view === 'map') setTimeout(() => map.invalidateSize(), 0);
 }
 

@@ -42,7 +42,7 @@
   - **Air pollution, yearly average:** fine-particle pollution (PM2.5) by community district, the best source for comparing neighborhoods
   - **Median income:** household income by ZIP
   - **3D view:** tilted 3D buildings with parks, gardens and your sites.
-- **Map | 3D | Street View** switch on the map. **Street View** opens Google Street View at the map's center, so you can walk the streets like in Google Maps. It needs a Google Maps API key in `js/config.js` (see below).
+- **Map | 3D** switch on the map.
 - **Neighborhood profile** in the sidebar:
   - plant (street-tree) species, street trees, and estimated CO₂ captured per year
   - green space in acres and as a share of the ZIP
@@ -85,6 +85,7 @@
     - vacant lots, with size and whether the city owns them
     - nearby community gardens
     - rooftops, rain gardens and planters
+  - **Design this planting:** upload a photo of the spot and drag plant stickers onto it, then download the mockup. Expand it to **half screen** or **full screen** while you work, and close it with **✕ Close** or Esc.
   - **Plant picks** from a curated list of about 30 plants that are native to or proven in NYC, matched to the light, the space and the goal.
   - **Start a petition** for a lot or bus stop, which carries the details over to the Community tab.
 - **Map key** in the corner explains each marker color, and the **🏙️ 3D view** button shows everything among 3D buildings.
@@ -226,11 +227,6 @@ Texts are sent by the `send-welcome-sms` Supabase Edge Function through [Twilio]
 
 Texting the public in the US also requires registering your sender with Twilio (A2P 10DLC or toll-free verification), which can take days.
 
-## Set up Street View (optional)
-
-1. In the [Google Cloud console](https://console.cloud.google.com/), enable the **Maps JavaScript API** and create an API key. A billing account is required, though there's a free monthly allowance.
-2. **Restrict the key** to your site's addresses (HTTP referrers such as `https://greenify-nyc.vercel.app/*` and `http://localhost:8765/*`) and to the Maps JavaScript API only.
-3. Put it in `GOOGLE_MAPS_API_KEY` in [`js/config.js`](js/config.js). Without a key, the Street View button explains that it isn't set up yet.
 
 ## Deploy
 
@@ -247,7 +243,6 @@ js/data.js              All data queries (NYC Open Data, Census Reporter, KartaV
 js/analysis.js          Calculations: area, walk access, AQI, carbon, sunlight (Turf.js)
 js/app.js               Map tab: profile, layers, click-to-select ZIPs, proposals, tabs, routing
 js/map3d.js             Reusable 3D view (MapLibre GL, loaded on demand)
-js/streetview.js        Google Street View for the Map tab (needs an API key)
 js/plants.js            Curated NYC plant list and recommender
 js/advisor.js           Build Ideas tab, street photos
 js/store.js             Community data store (Supabase)

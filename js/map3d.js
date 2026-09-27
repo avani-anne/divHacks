@@ -166,7 +166,7 @@ const Map3D = new View3D({
   onToggle: on => {
     $('#propose-btn').hidden = on;
     if (on) markMapView('3d');
-    else if (!StreetView.active) markMapView('map');
+    else markMapView('map');
   },
   layers: () => {
     if (!state.zipFeature) return [];
