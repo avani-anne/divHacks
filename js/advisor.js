@@ -41,6 +41,10 @@ const Advisor = {
   space: 'auto',
   goal: 'pollinators',
   token: 0,
+  designerCatalog: [],
+  designerItems: [],
+  designerPhotoUrl: null,
+  draggingDesignerItem: null,
 
   show() {
     if (!this.map) this.init();
@@ -72,6 +76,7 @@ const Advisor = {
     panel.addEventListener('change', e => {
       if (e.target.id === 'adv-space') this.space = e.target.value;
       if (e.target.id === 'adv-goal') this.goal = e.target.value;
+      if (e.target.id === 'designer-photo') this.setDesignerPhoto(e.target.files?.[0]);
       if (this.context) this.renderAnswer();
     });
     panel.addEventListener('click', e => {
@@ -80,6 +85,46 @@ const Advisor = {
       if (btn.dataset.action === 'locate') this.locate();
       if (btn.dataset.action === 'petition') Community.startPetition(JSON.parse(btn.dataset.prefill));
       if (btn.dataset.action === 'fly') this.map.flyTo([+btn.dataset.lat, +btn.dataset.lng], 18);
+      if (btn.dataset.action === 'designer-add') this.addDesignerPlant(btn.dataset.index);
+      if (btn.dataset.action === 'designer-remove') this.removeDesignerPlant(btn.dataset.id);
+      if (btn.dataset.action === 'designer-reset') this.resetDesigner();
+      if (btn.dataset.action === 'designer-export') this.exportDesigner();
+    });
+    panel.addEventListener('pointerdown', e => {
+      const item = e.target.closest('[data-design-item]');
+      if (!item || e.target.closest('[data-action="designer-remove"]')) return;
+      this.draggingDesignerItem = item.dataset.designItem;
+      item.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    panel.addEventListener('pointermove', e => {
+      if (!this.draggingDesignerItem) return;
+      const stage = $('#designer-stage');
+      if (!stage) return;
+      const rect = stage.getBoundingClientRect();
+      const plant = this.designerItems.find(item => item.id === this.draggingDesignerItem);
+      const marker = stage.querySelector(`[data-design-item="${this.draggingDesignerItem}"]`);
+      if (!plant || !marker) return;
+      plant.x = Math.max(16, Math.min(84, ((e.clientX - rect.left) / rect.width) * 100));
+      plant.y = Math.max(20, Math.min(78, ((e.clientY - rect.top) / rect.height) * 100));
+      marker.style.left = `${plant.x}%`;
+      marker.style.top = `${plant.y}%`;
+    });
+    panel.addEventListener('pointerup', () => { this.draggingDesignerItem = null; });
+    panel.addEventListener('pointercancel', () => { this.draggingDesignerItem = null; });
+    panel.addEventListener('keydown', e => {
+      const marker = e.target.closest('[data-design-item]');
+      if (!marker) return;
+      const plant = this.designerItems.find(item => item.id === marker.dataset.designItem);
+      if (!plant) return;
+      const step = e.shiftKey ? 5 : 1;
+      const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+      if (!moves[e.key]) return;
+      e.preventDefault();
+      plant.x = Math.max(16, Math.min(84, plant.x + moves[e.key][0]));
+      plant.y = Math.max(20, Math.min(78, plant.y + moves[e.key][1]));
+      marker.style.left = `${plant.x}%`;
+      marker.style.top = `${plant.y}%`;
     });
     this.renderAsk();
   },
@@ -113,7 +158,9 @@ const Advisor = {
           <div class="empty-icon">📍</div>
           <p>Pick a spot to see estimated sunlight, nearby places to build (empty tree beds, bus stops, vacant lots, gardens) and plants that fit.</p>
         </div>
+        <div id="adv-designer"></div>
       </div>`;
+    this.renderDesigner(Plants.recommend({ sun: 'full', space: 'yard' }, 12));
   },
 
   async select(point, fly) {
@@ -237,7 +284,142 @@ const Advisor = {
           <div class="plant-sun">${p.sun.map(s => `<span title="${SUN_INFO[s].label}">${SUN_INFO[s].icon}</span>`).join('')}</div>
         </div>`).join('') || '<p class="muted">No plants in our list match this combination. Try a different goal.</p>'}
       </div>
+      <div id="adv-designer"></div>
       <p class="footnote">Sunlight is estimated from NYC building footprint heights to the south of the pin. It doesn't account for trees, awnings or the direction a wall faces, so check the spot in person. Nearby features come from NYC Open Data: Forestry Planting Spaces, Bus Stop Shelters, PLUTO (vacant land) and GreenThumb.</p>`;
+    this.renderDesigner(plants);
+  },
+
+  renderDesigner(plants) {
+    const container = $('#adv-designer');
+    if (!container) return;
+    this.designerCatalog = plants.length ? plants : PLANTS.filter(plant => plant.native).slice(0, 12);
+    container.innerHTML = `
+      <section class="garden-designer">
+        <div class="designer-head">
+          <div><h3>Design this planting</h3><p>Photos stay in your browser.</p></div>
+          <button type="button" class="btn-link designer-reset" data-action="designer-reset">Reset</button>
+        </div>
+        <div class="designer-toolbar">
+          <label class="btn-secondary designer-upload" for="designer-photo">Upload photo</label>
+          <input id="designer-photo" type="file" accept="image/*" hidden>
+          <button type="button" class="btn-secondary" data-action="designer-export">Download PNG</button>
+        </div>
+        <div class="designer-gallery" aria-label="Plant sticker gallery">
+          ${this.designerCatalog.map((plant, index) => `
+            <button type="button" class="designer-gallery-item" data-action="designer-add" data-index="${index}" aria-label="Add ${esc(plant.name)} sticker">
+              <span class="designer-gallery-art" aria-hidden="true">${this.plantSticker(plant)}</span>
+              <span class="designer-gallery-name">${esc(plant.name)}</span>
+              ${plant.native ? '<span class="designer-gallery-native">NYC native</span>' : ''}
+            </button>`).join('')}
+        </div>
+        <div class="designer-stage${this.designerPhotoUrl ? ' has-photo' : ''}" id="designer-stage" aria-label="Planting mockup canvas">
+          ${this.designerPhotoUrl ? `<img class="designer-photo" src="${esc(this.designerPhotoUrl)}" alt="Your planting space">` : '<div class="designer-empty">Planting mockup</div>'}
+          ${this.designerItems.map(plant => `
+            <div class="designer-sticker" data-design-item="${esc(plant.id)}" style="left:${plant.x}%;top:${plant.y}%" tabindex="0" role="group" aria-label="${esc(plant.name)} sticker; drag or use arrow keys to move">
+              <span class="designer-sticker-art" aria-hidden="true">${plant.art}</span>
+              <span class="designer-sticker-name">${esc(plant.name)}</span>
+              <button type="button" data-action="designer-remove" data-id="${esc(plant.id)}" aria-label="Remove ${esc(plant.name)}">×</button>
+            </div>`).join('')}
+        </div>
+      </section>`;
+  },
+
+  plantSticker(plant) {
+    const kind = plant.kind.toLowerCase();
+    if (kind.includes('tree')) return '🌳';
+    if (kind.includes('shrub')) return '🌿';
+    if (kind.includes('grass')) return '🌾';
+    if (kind.includes('fern') || kind.includes('groundcover') || kind.includes('herb')) return '🌱';
+    if (kind.includes('vegetable')) return '🥬';
+    if (kind.includes('succulent')) return '🪴';
+    return '🌼';
+  },
+
+  addDesignerPlant(catalogIndex) {
+    const plant = this.designerCatalog[Number(catalogIndex)];
+    if (!plant) return;
+    const placementIndex = this.designerItems.length;
+    this.designerItems.push({
+      id: `design-${Date.now().toString(36)}-${placementIndex}`,
+      name: plant.name, latin: plant.latin, kind: plant.kind, native: plant.native, art: this.plantSticker(plant),
+      x: 22 + (placementIndex % 4) * 18, y: 30 + (Math.floor(placementIndex / 4) % 3) * 22,
+    });
+    this.renderDesigner(this.designerCatalog);
+  },
+
+  removeDesignerPlant(id) {
+    this.designerItems = this.designerItems.filter(plant => plant.id !== id);
+    this.renderDesigner(this.designerCatalog);
+  },
+
+  setDesignerPhoto(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast('Choose an image file for the planting mockup.');
+      return;
+    }
+    if (this.designerPhotoUrl) URL.revokeObjectURL(this.designerPhotoUrl);
+    this.designerPhotoUrl = URL.createObjectURL(file);
+    this.renderDesigner(this.designerCatalog);
+  },
+
+  resetDesigner() {
+    if (this.designerPhotoUrl) URL.revokeObjectURL(this.designerPhotoUrl);
+    this.designerPhotoUrl = null;
+    this.designerItems = [];
+    this.renderDesigner(this.designerCatalog);
+  },
+
+  async exportDesigner() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 720;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#edf1e7';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (this.designerPhotoUrl) {
+      try {
+        const image = new Image();
+        image.src = this.designerPhotoUrl;
+        await image.decode();
+        const scale = Math.max(canvas.width / image.width, canvas.height / image.height);
+        const width = image.width * scale;
+        const height = image.height * scale;
+        context.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+      } catch {
+        toast('Could not add that photo to the mockup. Try another image.');
+        return;
+      }
+    } else {
+      context.strokeStyle = 'rgba(34, 77, 50, .12)';
+      for (let x = 0; x <= canvas.width; x += 48) {
+        context.beginPath(); context.moveTo(x, 0); context.lineTo(x, canvas.height); context.stroke();
+      }
+      for (let y = 0; y <= canvas.height; y += 48) {
+        context.beginPath(); context.moveTo(0, y); context.lineTo(canvas.width, y); context.stroke();
+      }
+    }
+
+    this.designerItems.forEach(plant => {
+      const x = (plant.x / 100) * canvas.width;
+      const y = (plant.y / 100) * canvas.height;
+      context.font = '54px "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+      context.textAlign = 'center';
+      context.fillText(plant.art, x, y + 12);
+      context.font = '600 19px sans-serif';
+      const label = plant.name.length > 24 ? `${plant.name.slice(0, 22)}…` : plant.name;
+      const labelWidth = Math.min(250, context.measureText(label).width + 24);
+      context.fillStyle = 'rgba(255, 255, 255, .94)';
+      context.fillRect(x - labelWidth / 2, y + 20, labelWidth, 34);
+      context.fillStyle = '#183c27';
+      context.fillText(label, x, y + 43, labelWidth - 16);
+    });
+
+    const link = document.createElement('a');
+    link.download = 'garden-mockup.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
   },
 
   opportunities(space) {
