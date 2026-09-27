@@ -17,6 +17,268 @@ const COLORS = {
 
 const PROPOSAL_TYPES = ['Pocket park', 'Community garden', 'Street tree planting', 'Greenway / green street', 'Playground', 'Green roof', 'Rain garden / bioswale'];
 const STORAGE_KEY = 'gsp-proposals-v1';
+const EXPLORE_PARKS = [
+  { name: 'Fort Tryon Park', borough: 'Manhattan', route: 'Heather Garden and Linden Terrace', terrain: ['paved', 'unpaved'], experiences: ['views', 'historic'], known: 'Clifftop gardens, sweeping Hudson River views, and the medieval Met Cloisters.', facilities: 'Heather Garden, public restrooms, benches, and the Met Cloisters nearby.', expect: 'Hilly paths and stone steps; the garden is especially vivid in spring.', prep: 'Comfortable walking shoes for steep paths and stairs.', spots: 'The Met Cloisters, Heather Garden, and the New Leaf Cafe.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/9800.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-9800/', photoCredit: 'NYC Parks', imageAlt: 'Heather Gardens at Fort Tryon Park', tags: ['Clifftop views', 'Gardens', 'Architecture'] },
+  { name: 'Inwood Hill Park', borough: 'Manhattan', route: 'Water-Edge Inlet Loop', terrain: ['unpaved', 'steep'], experiences: ['woods', 'wildlife'], known: 'Manhattan’s last natural forest, salt marshes, and a tucked-away tidal inlet.', facilities: 'Nature Center, ball fields, kayak launch, and marked woodland trails.', expect: 'Roots, mud, and changing trail conditions around the inlet and forest.', prep: 'Tick repellent, water, and shoes with reliable grip.', spots: 'Inwood Hill Nature Center and the Dyckman Farmhouse Museum.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/9727.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-9727/', photoCredit: 'NYC Parks', imageAlt: 'A view toward the bridge at Inwood Hill Park', tags: ['Old-growth forest', 'Tidal inlet', 'Wildlife'] },
+  { name: 'Highbridge Park', borough: 'Manhattan', route: 'High Bridge and Water Tower', terrain: ['paved', 'steep'], experiences: ['views', 'historic'], known: 'The High Bridge, New York City’s oldest surviving bridge, above the Harlem River.', facilities: 'High Bridge, Highbridge Water Tower, playgrounds, and recreation areas.', expect: 'A steep climb connects the park’s upper paths to the river-level bridge.', prep: 'Walking shoes and a little extra time for the hill.', spots: 'High Bridge, the Water Tower, and nearby Highbridge Recreation Center.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/25656.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-25656/', photoCredit: 'NYC Parks', imageAlt: 'Highbridge Park in Manhattan', tags: ['Historic bridge', 'River views', 'Architecture'] },
+  { name: 'Prospect Park', borough: 'Brooklyn', route: 'Main Loop and Long Meadow', terrain: ['paved', 'unpaved'], experiences: ['woods', 'wildlife', 'views'], known: 'A long open meadow framed by woodland, waterways, and classic park scenery.', facilities: 'Audubon Center, boathouse, public restrooms, picnic areas, and paved loop.', expect: 'The full loop is long; paths are busy around major entrances on weekends.', prep: 'Bring water and plan a route before heading into the larger park.', spots: 'Prospect Park Zoo, LeFrak Center at Lakeside, and the Boathouse.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/25062.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-25062/', photoCredit: 'NYC Parks', imageAlt: 'Prospect Park in Brooklyn', tags: ['Long Meadow', 'Woodland', 'Lake'] },
+  { name: 'Marine Park', borough: 'Brooklyn', route: 'Gerritsen Creek Nature Trail', terrain: ['unpaved'], experiences: ['beach', 'wildlife', 'woods'], known: 'Salt marsh, tidal creek, and wide-open grassland on Brooklyn’s southern shore.', facilities: 'Salt Marsh Nature Center, nature trails, ball fields, and picnic areas.', expect: 'Exposed boardwalk and meadow sections with little shade; check tide and weather.', prep: 'Sun protection, water, and insect repellent in warm months.', spots: 'Salt Marsh Nature Center and the Gerritsen Creek shoreline.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/27389.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-27389/', photoCredit: 'NYC Parks', imageAlt: 'Salt marsh viewed from the Marine Park Nature Center', tags: ['Salt marsh', 'Birding', 'Tidal creek'] },
+  { name: 'Shirley Chisholm State Park', borough: 'Brooklyn', route: 'Peninsula trails and overlook', terrain: ['paved', 'unpaved'], experiences: ['views', 'wildlife'], known: 'Rolling hills built on a former landfill, with big harbor and skyline views.', facilities: 'Fishing piers, bike paths, picnic areas, kayak launch, and visitor center.', expect: 'Long, exposed paths across open hills with limited shade.', prep: 'Water, sun protection, and comfortable shoes for a long walk.', spots: 'Harbor overlooks, fishing piers, and the park’s visitor center.', image: 'https://parks.ny.gov/sites/default/files/styles/1x1_450/public/2025-10/Shirley%20Chisholm-Drone-060225-6.jpg.webp?h=3e8da8cb&itok=NOXJXacw', photoSource: 'https://parks.ny.gov/visit/state-parks/shirley-chisholm-state-park', photoCredit: 'New York State Parks', imageAlt: 'Aerial view of Shirley Chisholm State Park beside the water', tags: ['Harbor views', 'Fishing', 'Open hills'] },
+  { name: 'Flushing Meadows Corona Park', borough: 'Queens', route: 'World’s Fair grounds and Meadow Lake', terrain: ['paved'], experiences: ['views', 'historic', 'wildlife'], known: 'The Unisphere, World’s Fair landmarks, and broad lakeside paths.', facilities: 'Queens Museum, New York Hall of Science, boating, sports fields, and restrooms.', expect: 'A large, mostly level park with long distances between landmarks.', prep: 'Comfortable shoes and a transit or park map to plan your route.', spots: 'Queens Museum, New York Hall of Science, and the Unisphere.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/25085.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-25085/', photoCredit: 'NYC Parks', imageAlt: 'Flushing Meadows Corona Park in Queens', tags: ['World’s Fair', 'Unisphere', 'Meadow Lake'] },
+  { name: 'Alley Pond Park', borough: 'Queens', route: 'Environmental Center trails', terrain: ['unpaved', 'steep'], experiences: ['woods', 'wildlife'], known: 'Glacial kettle ponds, dense forest, and a quiet network of natural trails.', facilities: 'Alley Pond Environmental Center, nature trails, playgrounds, and picnic areas.', expect: 'Uneven, sometimes muddy trails; trail markings can be easy to miss.', prep: 'Tick repellent, water, and sturdy shoes; check trail conditions after rain.', spots: 'Alley Pond Environmental Center and the Queens Giant tulip tree.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/24913.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-24913/', photoCredit: 'NYC Parks', imageAlt: 'Alley Pond Park in Queens', tags: ['Forest trails', 'Glacial ponds', 'Queens Giant'] },
+  { name: 'Forest Park', borough: 'Queens', route: 'Yellow-Blazed Trail', terrain: ['unpaved', 'steep'], experiences: ['woods', 'wildlife'], known: 'A deep woodland ridge with a marked trail through one of the city’s largest forests.', facilities: 'Nature trails, bridle paths, golf course, carousel, and picnic areas.', expect: 'Rooted, hilly trail sections and limited facilities inside the woods.', prep: 'Tick repellent, a trail map, and sturdy hiking shoes.', spots: 'Forest Park Carousel, the bandshell, and the park’s nature trails.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/27509.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-27509/', photoCredit: 'NYC Parks', imageAlt: 'Forest Park in Queens', tags: ['Woodland ridge', 'Yellow trail', 'Birding'] },
+  { name: 'Ferry Point Park', borough: 'Bronx', route: 'East River waterfront paths', terrain: ['paved'], experiences: ['views', 'wildlife'], known: 'Open waterfront grassland and broad views of the Whitestone and Throgs Neck bridges.', facilities: 'Golf course, soccer fields, playground, and waterfront paths.', expect: 'Open, breezy paths with little shade and long stretches between facilities.', prep: 'Sun and wind protection, water, and comfortable walking shoes.', spots: 'The waterfront promenade and Ferry Point Park Golf Course.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/10494.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-10494/', photoCredit: 'NYC Parks · Malcolm Pinckney · archival (2008)', imageAlt: 'An archival view of the future Ferry Point Park golf course site', tags: ['Bridge views', 'Waterfront', 'Open meadow'] },
+  { name: 'Van Cortlandt Park', borough: 'Bronx', route: 'The Putnam Trail', terrain: ['paved', 'unpaved'], experiences: ['woods', 'historic', 'wildlife'], known: 'A former railroad corridor through wetlands, forest, and the city’s third-largest park.', facilities: 'Van Cortlandt House Museum, golf, riding stables, and sports fields.', expect: 'Mostly gentle grades with natural-surface sections that can be muddy.', prep: 'Water and shoes suited to dirt or gravel after rain.', spots: 'Van Cortlandt House Museum, the Nature Center, and the lake.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/27234.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-27234/', photoCredit: 'NYC Parks', imageAlt: 'Walkers in Van Cortlandt Park on a fall day', tags: ['Rail trail', 'Wetlands', 'Historic house'] },
+  { name: 'Pelham Bay Park', borough: 'Bronx', route: 'Kazimiroff Nature Trail on Hunter Island', terrain: ['unpaved', 'steep'], experiences: ['beach', 'woods', 'wildlife', 'historic'], known: 'A wooded peninsula with rocky shoreline, salt marsh, and traces of the old Hunter mansion.', facilities: 'Orchard Beach, Bartow-Pell Mansion Museum, picnic areas, and nature trails.', expect: 'Rocky, uneven trail segments near the shore; the park is very large.', prep: 'Sturdy shoes, water, and tick repellent for wooded paths.', spots: 'Orchard Beach and Bartow-Pell Mansion Museum.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/9864.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-9864/', photoCredit: 'NYC Parks', imageAlt: 'Pelham Bay Park in the Bronx', tags: ['Island forest', 'Rocky shore', 'Historic ruins'] },
+  { name: 'Silver Lake Park', borough: 'Staten Island', route: 'Silver Lake Reservoir paths', terrain: ['paved'], experiences: ['views', 'wildlife'], known: 'A reservoir-side retreat with mature trees, a lake, and open views across the water.', facilities: 'Paved walking paths, golf course, playground, and fishing areas.', expect: 'A calm, mostly level loop shared with local walkers and runners.', prep: 'Comfortable walking shoes; observe posted fishing and reservoir rules.', spots: 'The reservoir overlook and Silver Lake Golf Course.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/19929.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-19929/', photoCredit: 'NYC Parks', imageAlt: 'Looking out on Silver Lake in Staten Island', tags: ['Reservoir', 'Lake loop', 'Birding'] },
+  { name: 'Conference House Park', borough: 'Staten Island', route: 'Blue Loop and shoreline', terrain: ['unpaved', 'steep'], experiences: ['beach', 'views', 'historic'], known: 'A historic shoreline at the island’s southern tip, where the 1776 peace conference took place.', facilities: 'Conference House Museum, marked trails, beach access, and picnic areas.', expect: 'Quiet, exposed shoreline paths with muddy or uneven sections after rain.', prep: 'Sturdy shoes, wind protection, and check museum hours before visiting.', spots: 'Conference House Museum and the southern shoreline overlook.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/10160.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-10160/', photoCredit: 'NYC Parks', imageAlt: 'The Conference House in September', tags: ['Colonial history', 'Shoreline', 'Blue Loop'] },
+  { name: 'Staten Island Greenbelt', borough: 'Staten Island', route: 'Yellow Trail', terrain: ['unpaved', 'steep'], experiences: ['woods', 'wildlife'], known: 'A connected woodland network with wetlands, quiet ravines, and deep forest canopy.', facilities: 'Greenbelt Nature Center, trailheads, visitor programs, and restrooms at select sites.', expect: 'Natural trails with roots, hills, and limited cell service in some sections.', prep: 'Tick repellent, water, sturdy hiking shoes, and an offline trail map.', spots: 'Greenbelt Nature Center and the High Rock Park ponds.', image: 'https://www.nycgovparks.org/photo_gallery/full_size/25030.jpg', photoSource: 'https://www.nycgovparks.org/photo/photo-25030/', photoCredit: 'NYC Parks', imageAlt: 'Blood Root Valley, part of the Staten Island Greenbelt', tags: ['Forest network', 'Wetlands', 'Yellow Trail'] },
+];
+const NEARBY_SPOTS = {
+  'Fort Tryon Park': [
+    { type: 'Food', name: 'The Bonnefont', detail: 'Park café in Fort Tryon’s former concession building; check its current service days.' },
+    { type: 'Culture', name: 'The Met Cloisters', detail: 'Medieval art and architecture museum inside the park.' },
+  ],
+  'Inwood Hill Park': [
+    { type: 'Food', name: 'Indian Road Cafe', detail: 'Neighborhood café near the park’s north end.' },
+    { type: 'Culture', name: 'Dyckman Farmhouse Museum', detail: 'An 18th-century farmhouse museum in Inwood.' },
+  ],
+  'Highbridge Park': [
+    { type: 'Food', name: 'Malecon', detail: 'Long-running Dominican restaurant near 175th Street.' },
+    { type: 'Culture', name: 'The High Bridge', detail: 'Historic aqueduct bridge above the Harlem River.' },
+  ],
+  'Prospect Park': [
+    { type: 'Food', name: 'Parkside Restaurant', detail: 'Neighborhood Italian restaurant near the park’s southeast side.' },
+    { type: 'Culture', name: 'Brooklyn Botanic Garden', detail: 'Garden collections beside Prospect Park’s northeast corner.' },
+  ],
+  'Marine Park': [
+    { type: 'Food', name: 'Roll-N-Roaster', detail: 'A Brooklyn classic for roast beef and seafood near Sheepshead Bay.' },
+    { type: 'Culture', name: 'Salt Marsh Nature Center', detail: 'Ranger programs and exhibits about Jamaica Bay habitats.' },
+  ],
+  'Shirley Chisholm State Park': [
+    { type: 'Food', name: 'Gateway Center', detail: 'Nearby shops and casual dining; check Maps for current options.' },
+    { type: 'Culture', name: 'Brooklyn Terminal Market', detail: 'A long-running produce market in the surrounding neighborhood.' },
+  ],
+  'Flushing Meadows Corona Park': [
+    { type: 'Food', name: 'Queens Night Market', detail: 'Seasonal outdoor food market on select evenings in the park.' },
+    { type: 'Culture', name: 'Queens Museum', detail: 'See the Panorama of the City of New York and rotating exhibitions.' },
+  ],
+  'Alley Pond Park': [
+    { type: 'Culture', name: 'Alley Pond Environmental Center', detail: 'Nature exhibits and public programs beside the park trails.' },
+    { type: 'Culture', name: 'Queens County Farm Museum', detail: 'Historic working farm and seasonal programs a short drive away.' },
+  ],
+  'Forest Park': [
+    { type: 'Food', name: 'Eddie’s Sweet Shop', detail: 'Old-fashioned ice cream parlor in nearby Forest Hills.' },
+    { type: 'Culture', name: 'Forest Park Carousel', detail: 'Historic carousel and bandshell within the park.' },
+  ],
+  'Ferry Point Park': [
+    { type: 'Food', name: 'City Island seafood row', detail: 'A short drive away for Bronx seafood restaurants; check routes before you go.' },
+    { type: 'Culture', name: 'Bronx-Whitestone Bridge overlook', detail: 'Waterfront views of the landmark bridge from the park.' },
+  ],
+  'Van Cortlandt Park': [
+    { type: 'Food', name: 'Lloyd’s Carrot Cake', detail: 'Beloved neighborhood bakery on Broadway near the park.' },
+    { type: 'Culture', name: 'Van Cortlandt House Museum', detail: 'Historic house museum within the park.' },
+  ],
+  'Pelham Bay Park': [
+    { type: 'Food', name: 'City Island seafood row', detail: 'Local seafood restaurants a short drive from Hunter Island.' },
+    { type: 'Culture', name: 'Bartow-Pell Mansion Museum', detail: 'A restored 19th-century mansion and gardens in the park.' },
+  ],
+  'Silver Lake Park': [
+    { type: 'Food', name: 'DOUGH Pizzeria', detail: 'Neighborhood pizzeria in the Silver Lake area.' },
+    { type: 'Culture', name: 'Snug Harbor Cultural Center', detail: 'Museums, historic buildings, and botanical gardens a short drive away.' },
+  ],
+  'Conference House Park': [
+    { type: 'Food', name: 'DeLuca’s Italian Restaurant', detail: 'Neighborhood Italian dining in Tottenville.' },
+    { type: 'Culture', name: 'Conference House Museum', detail: 'Historic house and grounds at Staten Island’s southern tip.' },
+  ],
+  'Staten Island Greenbelt': [
+    { type: 'Food', name: 'Killmeyer’s Old Bavaria Inn', detail: 'Long-running German restaurant and beer garden near the Greenbelt.' },
+    { type: 'Culture', name: 'High Rock Park Nature Center', detail: 'Greenbelt trailhead, ponds, and nature programs.' },
+  ],
+};
+const PARK_GUIDE = {
+  'Fort Tryon Park': {
+    why: 'Come for the rare city combination of a formal garden, a cliff-edge river vista, and a world-class medieval collection a few paths apart.',
+    explore: [
+      { name: 'Heather Garden', detail: 'Wander through a large public garden with seasonal beds and Hudson-facing views.' },
+      { name: 'Linden Terrace', detail: 'Pause at the stone balustrade for a broad look over the Hudson and Palisades.' },
+      { name: 'Billings Arcade', detail: 'Step through the vaulted stone passage built into the park’s hillside.' },
+    ],
+    notes: [
+      { label: 'Paths + grades', detail: 'The park drops steeply from Broadway to the river. Expect stairs and hills between the Heather Garden and lower paths.' },
+      { label: 'Museum visit', detail: 'The Met Cloisters is a separate museum destination; check admission and opening hours before planning your loop.' },
+    ],
+  },
+  'Inwood Hill Park': {
+    why: 'This is a chance to trade Manhattan blocks for a tidal marsh, glacial ridges, and forest canopy without leaving the city.',
+    explore: [
+      { name: 'Muscota Marsh', detail: 'Look for water birds from the Hudson-side marsh overlook.' },
+      { name: 'Shorakkopoch Rock', detail: 'Find the park’s landmark rock and pause to read its posted interpretation.' },
+      { name: 'Inwood Hill Nature Center', detail: 'Start here for ranger programs and a sense of the park’s natural history.' },
+    ],
+    notes: [
+      { label: 'Forest trails', detail: 'Roots, rocks, and muddy sections are common after rain. Use marked paths and sturdy shoes.' },
+      { label: 'At the water edge', detail: 'The inlet and marsh are tidal habitats, not swimming areas. Bring tick repellent for woodland trails.' },
+    ],
+  },
+  'Highbridge Park': {
+    why: 'Pair a dramatic Harlem River crossing with the city’s oldest standing bridge, then climb back into a surprisingly wild hillside park.',
+    explore: [
+      { name: 'The High Bridge', detail: 'Walk the historic aqueduct crossing between Manhattan and the Bronx.' },
+      { name: 'Highbridge Water Tower', detail: 'See the Gothic Revival tower that once supported the city’s water system.' },
+      { name: 'Coogan’s Bluff', detail: 'Take in the elevated Harlem River views from the park’s historic overlook.' },
+    ],
+    notes: [
+      { label: 'Hills + stairs', detail: 'The bridge sits well below some park entrances; plan for a steep return climb.' },
+      { label: 'Historic structures', detail: 'Bridge and tower access can vary with maintenance or events. Check current park notices before traveling.' },
+    ],
+  },
+  'Prospect Park': {
+    why: 'Follow an easy-to-customize loop from open meadow into quieter woodland, with the boathouse and lake as a memorable finish.',
+    explore: [
+      { name: 'Long Meadow', detail: 'Stretch out on one of the country’s longest continuously maintained meadows.' },
+      { name: 'The Ravine', detail: 'Take a woodland detour through the park’s stream valley and forest paths.' },
+      { name: 'Lullwater + Boathouse', detail: 'Circle the lake for the park’s most storied landscape architecture.' },
+    ],
+    notes: [
+      { label: 'Choose a loop', detail: 'The full park is large; pick a few landmarks first and leave time for the return walk.' },
+      { label: 'Busy entrances', detail: 'The main paths and Long Meadow get busy on weekends. Check the Alliance map for restrooms and seasonal concessions.' },
+    ],
+  },
+  'Marine Park': {
+    why: 'Explore a salt-marsh landscape that feels far from the city, with tidal creeks and bird habitat rather than a manicured waterfront.',
+    explore: [
+      { name: 'Gerritsen Creek', detail: 'Watch the creek edge and its shifting salt-marsh channels from marked paths.' },
+      { name: 'Salt Marsh Nature Trail', detail: 'Use the boardwalk and trail viewpoints to notice marsh plants and shorebirds.' },
+      { name: 'Grassland preserve', detail: 'The open interior is valuable bird habitat; keep to established paths.' },
+    ],
+    notes: [
+      { label: 'Tide + weather', detail: 'Water levels and trail conditions change. Check forecasts and stay on marked boardwalks.' },
+      { label: 'Shade + insects', detail: 'Much of the route is exposed. Bring water, sun protection, and insect repellent in warm weather.' },
+    ],
+  },
+  'Shirley Chisholm State Park': {
+    why: 'Climb the reclaimed hills for a wide-open view across Jamaica Bay, then follow a waterfront path past piers and native meadow.',
+    explore: [
+      { name: 'Penn Pier', detail: 'Take in the bay and skyline from the park’s waterfront edge.' },
+      { name: 'Hendrix Creek Patio', detail: 'Pause at the creekside overlook and look for birds moving along the water.' },
+      { name: 'Fountain Pier', detail: 'Follow the shoreline path to another open-water viewpoint.' },
+    ],
+    notes: [
+      { label: 'Open hills', detail: 'The paths are long and exposed with limited shade. Carry water and sun protection.' },
+      { label: 'Bike Library', detail: 'Bike loans are seasonal and weather-dependent; check the state park’s current schedule before counting on one.' },
+    ],
+  },
+  'Flushing Meadows Corona Park': {
+    why: 'Move between World’s Fair landmarks, city-scale art, museums, and a quiet lake loop in one expansive Queens park.',
+    explore: [
+      { name: 'The Unisphere', detail: 'See the monumental steel globe built for the 1964 World’s Fair.' },
+      { name: 'Meadow Lake', detail: 'Take a quieter waterside walk away from the park’s busiest plazas.' },
+      { name: 'New York State Pavilion', detail: 'Spot the surviving 1964 World’s Fair towers and saucer-shaped observation deck.' },
+    ],
+    notes: [
+      { label: 'Distances', detail: 'Landmarks are spread across a very large park. Group stops by area and allow extra walking time.' },
+      { label: 'Museums + events', detail: 'Queens Museum and other venues have their own hours, admission, and event schedules; verify before visiting.' },
+    ],
+  },
+  'Alley Pond Park': {
+    why: 'Trade the city grid for a glacial landscape of kettle ponds, old trees, and the Queens Giant, one of the city’s most remarkable trees.',
+    explore: [
+      { name: 'The Queens Giant', detail: 'Visit the tulip tree estimated to be among the oldest and tallest trees in New York City.' },
+      { name: 'Oakland Lake', detail: 'Walk the waterside path through a freshwater wetland habitat.' },
+      { name: 'Kettle ponds + woodland trails', detail: 'Look for glacially formed ponds and varied forest on the marked natural trails.' },
+    ],
+    notes: [
+      { label: 'Trail conditions', detail: 'Natural paths can be muddy and trail markers are easy to miss. Download a route map before setting out.' },
+      { label: 'Environmental Center', detail: 'Programs and building hours vary; confirm the schedule before making it a planned stop.' },
+    ],
+  },
+  'Forest Park': {
+    why: 'The Yellow-Blazed Trail gives you a genuine woodland walk over a forested ridge, with a historic carousel and summer bandshell nearby.',
+    explore: [
+      { name: 'Yellow-Blazed Trail', detail: 'Follow the park’s marked hiking route through the eastern woods.' },
+      { name: 'Oak forest ridge', detail: 'Notice the mature oak canopy and rolling terrain that divide the park’s natural and open areas.' },
+      { name: 'Carousel + Bandshell', detail: 'Finish near the historic carousel or catch a seasonal performance at the bandshell.' },
+    ],
+    notes: [
+      { label: 'Blazes + terrain', detail: 'The wooded trail has roots, slopes, and turns. Follow yellow markings and carry an offline map.' },
+      { label: 'Visitor Center', detail: 'The Nature Center is not always open to walk-ins; verify hours and programs before planning around it.' },
+    ],
+  },
+  'Ferry Point Park': {
+    why: 'Choose this trip for open sky and water: the bridge views are the main event, with long waterfront paths to slow the pace.',
+    explore: [
+      { name: 'Whitestone Bridge waterfront', detail: 'Follow the shoreline path for close views of the bridge and East River.' },
+      { name: 'Ferry landing', detail: 'Check the current ferry schedule and watch the Bronx waterfront from the landing area.' },
+      { name: 'Waterfront greenway', detail: 'Walk or roll the open path between lawn, harbor, and recreation areas.' },
+    ],
+    notes: [
+      { label: 'Wind + shade', detail: 'The waterfront is exposed, with long stretches between facilities. Bring water and sun or wind protection.' },
+      { label: 'Photo context', detail: 'The Ferry Point image on this guide is archival from 2008, before the current golf course was built.' },
+    ],
+  },
+  'Van Cortlandt Park': {
+    why: 'Trace the route of an old railway through wetlands and forest, then step into Bronx history at the Van Cortlandt House.',
+    explore: [
+      { name: 'The Putnam Trail', detail: 'Follow the former rail corridor through the park’s northern landscape.' },
+      { name: 'Van Cortlandt Lake', detail: 'Loop by the lake and look for water birds along the shore.' },
+      { name: 'Croton Woods', detail: 'Take a marked woodland detour to see one of the park’s natural areas.' },
+    ],
+    notes: [
+      { label: 'Shared trail', detail: 'The Putnam is a multi-use route; expect cyclists and other trail users. Natural sections can be muddy after rain.' },
+      { label: 'Nature Center + museum', detail: 'The Nature Center and Van Cortlandt House have separate schedules. Check both before planning a visit.' },
+    ],
+  },
+  'Pelham Bay Park': {
+    why: 'Hunter Island brings together rocky shoreline, coastal forest, and traces of a vanished estate inside New York City’s largest park.',
+    explore: [
+      { name: 'Kazimiroff Nature Trail', detail: 'Follow the loop over Hunter Island through woodland and coastal habitats.' },
+      { name: 'Orchard Beach', detail: 'See the historic promenade and Long Island Sound shoreline.' },
+      { name: 'Hunter Island shoreline', detail: 'Look for rocky coves and salt-marsh views along the peninsula.' },
+    ],
+    notes: [
+      { label: 'Trail surface', detail: 'The Hunter Island path has uneven, rocky sections. Wear shoes with grip and stay on marked routes.' },
+      { label: 'Park scale', detail: 'Pelham Bay is exceptionally large; confirm your trailhead and transit or parking plan before entering.' },
+    ],
+  },
+  'Silver Lake Park': {
+    why: 'A calm reservoir loop makes this a restorative, low-key walk, with a distinct view of Staten Island’s historic water landscape.',
+    explore: [
+      { name: 'Silver Lake Reservoir', detail: 'Follow the public paths around the lake and look across the water from the overlook.' },
+      { name: 'Audre Lorde Walk', detail: 'Find the park’s memorial walk honoring the poet and activist.' },
+      { name: 'Silver Lake Golf Course edge', detail: 'See how the park’s open fairways meet its older tree canopy.' },
+    ],
+    notes: [
+      { label: 'Shared paths', detail: 'The loop is popular with runners and local walkers. Keep to public paths around the reservoir.' },
+      { label: 'Reservoir rules', detail: 'Fishing and water access are controlled; follow signs and do not enter restricted areas.' },
+    ],
+  },
+  'Conference House Park': {
+    why: 'Pair shoreline walking with the site of a failed 1776 peace meeting, then reach the southernmost point of New York State.',
+    explore: [
+      { name: 'Blue Loop', detail: 'Follow the marked route through the park’s coastal woodland.' },
+      { name: 'The South Pole', detail: 'Visit the marker for New York State’s southernmost point.' },
+      { name: 'Raritan Bay shoreline', detail: 'Walk the exposed shore for broad views toward New Jersey.' },
+    ],
+    notes: [
+      { label: 'Museum hours', detail: 'Conference House Museum hours are limited and seasonal; verify the schedule before you go.' },
+      { label: 'Coastal paths', detail: 'Shoreline weather changes quickly and trails may be muddy. Bring layers and grippy shoes.' },
+    ],
+  },
+  'Staten Island Greenbelt': {
+    why: 'The Yellow Trail opens onto one of the city’s largest connected forests, where ponds, ridgelines, and quiet ravines feel far from town.',
+    explore: [
+      { name: 'Yellow Trail', detail: 'Follow the marked route through forest and wetland pockets.' },
+      { name: 'High Rock ponds', detail: 'Pause at the quiet ponds and watch for turtles, herons, and waterfowl.' },
+      { name: 'Mount Moses', detail: 'Climb to a wooded high point for a panoramic view over the Greenbelt.' },
+    ],
+    notes: [
+      { label: 'Navigation', detail: 'Trail intersections can be confusing and reception may fade. Download the Greenbelt map before leaving home.' },
+      { label: 'Trail conditions', detail: 'Expect roots, hills, and wet ground in the woods; tick protection and sturdy shoes are a good idea.' },
+    ],
+  },
+};
+const exploreState = { matches: [], index: 0, selected: null, touchX: null };
 
 const state = {
   zip: null,
@@ -567,7 +829,241 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
   document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== name; });
   if (name === 'map' && map) setTimeout(() => map.invalidateSize(), 0);
+  if (name === 'explore' && !explorePanel.innerHTML) renderExploreQuiz();
 }
+
+const explorePanel = $('#explore-panel');
+
+function renderExploreQuiz() {
+  explorePanel.innerHTML = `
+    <div class="explore-shell">
+      <header class="explore-heading">
+        <div><span class="kicker">A different side of New York</span><h1>Find your next outside.</h1><p>Pick a borough, a pace, and the kind of wild you want. We’ll find a park worth the trip.</p></div>
+        <span class="explore-index">NYC / FIELD GUIDE</span>
+      </header>
+      <form id="explore-form" class="explore-form">
+        <fieldset class="quiz-step"><legend><span>01</span> Where are you headed?</legend><p class="quiz-hint">Choose one or more boroughs.</p>
+          <div class="choice-grid borough-choices">${['Bronx', 'Manhattan', 'Queens', 'Brooklyn', 'Staten Island'].map((name, i) => `<label class="choice-card"><input type="checkbox" name="borough" value="${name}"><span class="choice-check"></span><span class="choice-name">${name}</span><span class="choice-number">0${i + 1}</span></label>`).join('')}</div>
+        </fieldset>
+        <fieldset class="quiz-step"><legend><span>02</span> Choose your pace.</legend><div class="choice-grid pace-choices">
+          ${[['paved', 'Stroll', 'Paved paths, an easy-going pace'], ['unpaved', 'Nature walk', 'Natural surfaces, a little wandering'], ['steep', 'Hike', 'Uneven trails and steeper climbs']].map(([value, title, desc]) => `<label class="choice-card"><input type="radio" name="terrain" value="${value}" required><span class="choice-check"></span><span class="choice-name">${title}</span><span class="choice-desc">${desc}</span></label>`).join('')}
+        </div></fieldset>
+        <fieldset class="quiz-step"><legend><span>03</span> What do you want to find?</legend><div class="choice-grid experience-choices">
+          ${[['beach', 'A beach'], ['views', 'Breathtaking views'], ['woods', 'Deep-woods canopy'], ['wildlife', 'Wildlife & hidden wetlands'], ['historic', 'Historic ruins & architecture']].map(([value, title]) => `<label class="choice-card"><input type="radio" name="experience" value="${value}" required><span class="choice-check"></span><span class="choice-name">${title}</span></label>`).join('')}
+        </div></fieldset>
+        <div class="quiz-submit"><p id="explore-error" class="form-error" role="alert"></p><button class="explore-button" type="submit">Show me the parks <span aria-hidden="true">→</span></button></div>
+      </form>
+    </div>`;
+}
+
+function parkScore(park, preferences) {
+  let score = preferences.boroughs.includes(park.borough) ? 5 : 0;
+  if (park.terrain.includes(preferences.terrain)) score += 3;
+  if (park.experiences.includes(preferences.experience)) score += 4;
+  return score;
+}
+
+function parkDirections(park) {
+  const destination = encodeURIComponent(`${park.name}, ${park.borough}, NY`);
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+}
+
+function renderExploreMatches() {
+  const park = exploreState.matches[exploreState.index];
+  if (!park) return;
+  const guide = PARK_GUIDE[park.name];
+  const position = exploreState.index + 1;
+  explorePanel.innerHTML = `
+    <div class="explore-shell">
+      <div class="results-topline"><div><span class="kicker">Your field guide</span><h1>Somewhere new.</h1></div><button type="button" class="text-button" data-explore-restart>Start over</button></div>
+      <div class="results-meta"><span>${exploreState.matches.length} parks picked for you</span><span>${String(position).padStart(2, '0')} <i>/</i> ${String(exploreState.matches.length).padStart(2, '0')}</span></div>
+      <article class="park-card" data-swipe-card>
+        <div class="park-photo"><img src="${esc(park.image)}" alt="${esc(park.imageAlt)}"><a class="photo-credit" href="${esc(park.photoSource)}" target="_blank" rel="noopener">Photo: ${esc(park.photoCredit)} ↗</a><span class="park-borough">${esc(park.borough)}</span></div>
+        <div class="park-copy"><div class="park-route">FIELD NOTE / ${esc(park.route)}</div><h2>${esc(park.name)}</h2>
+          <p class="park-known">${esc(park.known)}</p>
+          <p class="park-why"><span>WHY GO</span>${esc(guide.why)}</p>
+          <div class="park-details"><div><h3>On the ground</h3><p>${esc(park.expect)}</p></div><div><h3>Facilities</h3><p>${esc(park.facilities)}</p></div></div>
+          <div class="park-tags">${park.tags.map(tag => `<span>${esc(tag)}</span>`).join('')}</div>
+          <div class="park-actions"><button type="button" class="button-outline" data-match-prev ${position === 1 ? 'disabled' : ''} aria-label="Previous park">← <span>Previous</span></button><span class="swipe-hint">Swipe to explore</span><button type="button" class="button-outline" data-match-next ${position === exploreState.matches.length ? 'disabled' : ''} aria-label="Next park"><span>Next</span> →</button></div>
+          <button type="button" class="explore-button choose-park" data-choose-park>Make this the trip <span aria-hidden="true">↗</span></button>
+        </div>
+      </article>
+    </div>`;
+}
+
+function nearbySpotDirections(park, spot) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${spot.name} near ${park.name}, ${park.borough}, New York`)}`;
+}
+
+function itineraryText(park) {
+  const guide = PARK_GUIDE[park.name];
+  const stops = [
+    ...guide.explore.map(spot => ({ ...spot, type: 'In the park' })),
+    ...(NEARBY_SPOTS[park.name] || []),
+  ].map(spot => `${spot.type}: ${spot.name}\n${spot.detail}\nMaps: ${nearbySpotDirections(park, spot)}`
+  ).join('\n');
+  const notes = guide.notes.map(note => `${note.label}: ${note.detail}`).join('\n');
+  return `NYC GREEN SPACE / TRIP RECEIPT\n${park.name} · ${park.borough}\nSuggested route: ${park.route}\n\nWHY THIS PARK\n${guide.why}\n\nGETTING THERE\nGoogle Maps: ${parkDirections(park)}\n\nSPACES TO EXPLORE\n${stops}\n\nFIELD NOTES\n${notes}\n\nPACK FOR THE PATH\n${park.prep}\n\nCheck current hours and access before setting out.`;
+}
+
+function renderExploreItinerary() {
+  const park = exploreState.selected;
+  if (!park) return;
+  const guide = PARK_GUIDE[park.name];
+  const stops = [
+    ...guide.explore.map(spot => ({ ...spot, type: 'In the park' })),
+    ...(NEARBY_SPOTS[park.name] || []),
+  ];
+  const issued = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  explorePanel.innerHTML = `
+    <div class="explore-shell itinerary-shell is-printing">
+      <div class="receipt-topline"><span class="kicker">Your day outside / ${esc(park.borough)}</span><button type="button" class="text-button" data-explore-restart>Start a new search</button></div>
+      <div class="receipt-printer is-printing">
+        <div class="printer-casing"><span class="printer-status" role="status" aria-live="polite"><span class="printer-lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="printer-status-label">PRINTING RECEIPT</span></span><span class="printer-slot" aria-hidden="true"></span></div>
+      <article id="itinerary-receipt" class="itinerary-receipt is-printing" aria-hidden="true">
+        <header class="receipt-header"><div class="receipt-brand"><span>NYC / OUTSIDE</span><strong>FIELD RECEIPT</strong></div><div class="receipt-number"><span>TRIP NOTE</span><strong>${String(exploreState.index + 1).padStart(2, '0')} / ${String(exploreState.matches.length).padStart(2, '0')}</strong></div></header>
+        <div class="receipt-body">
+          <p class="receipt-date">ISSUED ${esc(issued)} · ${esc(park.borough.toUpperCase())}</p>
+          <h1>${esc(park.name)}</h1><p class="receipt-route">${esc(park.route)}</p>
+          <p class="receipt-why">${esc(guide.why)}</p>
+          <div class="receipt-stickers" aria-label="Park highlights"><span class="receipt-sticker sticker-sun"><b aria-hidden="true">✦</b> FIELD PICK</span><span class="receipt-sticker sticker-leaf">${esc(park.tags[0])}</span><span class="receipt-sticker sticker-sky">${esc(park.tags[1])}</span></div>
+          <section class="receipt-destination"><div><span class="receipt-label">DESTINATION</span><p>${esc(park.name)}, ${esc(park.borough)}, New York</p><a class="map-link" href="${parkDirections(park)}" target="_blank" rel="noopener">Open Google Maps directions <span aria-hidden="true">↗</span></a></div><div id="receipt-qr" class="receipt-qr" role="img" aria-label="QR code for directions to ${esc(park.name)}"></div></section>
+          <section class="receipt-section"><div class="receipt-section-heading"><span>01</span><h2>Spaces to explore</h2></div><p class="receipt-section-intro">A few ways to shape the day, from the trail itself to neighborhood culture.</p>
+            <ul class="nearby-stops">${stops.map(spot => `<li><span class="stop-type">${esc(spot.type)}</span><div class="stop-copy"><strong>${esc(spot.name)}</strong><p>${esc(spot.detail)}</p></div><a href="${nearbySpotDirections(park, spot)}" target="_blank" rel="noopener">Map <span aria-hidden="true">↗</span></a></li>`).join('')}</ul>
+          </section>
+          <div class="receipt-lower">
+            <section class="receipt-field prep-block"><div class="receipt-section-heading"><span>02</span><h2>Pack for the path</h2></div><p>${esc(park.prep)}</p></section>
+            <section class="receipt-field receipt-know"><div class="receipt-section-heading"><span>03</span><h2>Know before you go</h2></div><ul class="field-notes">${guide.notes.map(note => `<li><strong>${esc(note.label)}</strong><p>${esc(note.detail)}</p></li>`).join('')}</ul></section>
+          </div>
+        </div>
+        <footer class="receipt-footer"><span>TAKE THE LONG WAY HOME</span><span>NYC GREEN SPACE FIELD GUIDE</span></footer>
+      </article>
+      </div>
+      <div class="receipt-actions" data-html2canvas-ignore><button type="button" class="explore-button" data-download-itinerary disabled>Download receipt PNG <span aria-hidden="true">↓</span></button><button type="button" class="button-outline" data-email-itinerary disabled>Email itinerary <span aria-hidden="true">↗</span></button></div>
+      <p id="receipt-export-status" class="receipt-export-status" role="status" aria-live="polite"></p>
+      <button type="button" class="text-button back-to-matches" data-back-matches>← Back to park matches</button>
+    </div>`;
+  const receipt = $('#itinerary-receipt');
+  const printer = $('.receipt-printer');
+  const printControls = explorePanel.querySelectorAll('[data-download-itinerary], [data-email-itinerary]');
+  receipt.setAttribute('aria-hidden', 'true');
+  let printFallback;
+  let printFinished = false;
+  const finishPrinting = () => {
+    if (printFinished) return;
+    printFinished = true;
+    clearTimeout(printFallback);
+    receipt.classList.remove('is-printing');
+    receipt.classList.add('is-printed');
+    receipt.removeAttribute('aria-hidden');
+    printer.classList.remove('is-printing');
+    explorePanel.querySelector('.itinerary-shell').classList.remove('is-printing');
+    printer.querySelector('.printer-status-label').textContent = 'READY / TEAR TO TAKE';
+    printControls.forEach(control => { control.disabled = false; });
+  };
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) finishPrinting();
+  else {
+    const duration = Number.parseFloat(getComputedStyle(receipt).animationDuration) * 1000;
+    printFallback = setTimeout(finishPrinting, duration + 500);
+    receipt.addEventListener('animationend', event => {
+      if (event.animationName === 'receipt-feed') finishPrinting();
+    }, { once: true });
+  }
+  if (window.QRCode) {
+    new QRCode($('#receipt-qr'), { text: parkDirections(park), width: 84, height: 84, colorDark: '#10261a', colorLight: '#fffdf8', correctLevel: QRCode.CorrectLevel.M });
+  }
+}
+
+async function tearReceipt() {
+  const printer = $('.receipt-printer');
+  if (!printer || printer.classList.contains('is-torn')) return;
+  const buttons = explorePanel.querySelectorAll('[data-download-itinerary], [data-email-itinerary]');
+  buttons.forEach(button => { button.disabled = true; });
+  printer.classList.add('is-tearing');
+  printer.querySelector('.printer-status-label').textContent = 'TEARING RECEIPT';
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  await new Promise(resolve => setTimeout(resolve, reducedMotion ? 0 : 760));
+  printer.classList.remove('is-tearing');
+  printer.classList.add('is-torn');
+  printer.querySelector('.printer-status-label').textContent = 'TICKET DETACHED';
+}
+
+async function downloadItineraryPng() {
+  const receipt = $('#itinerary-receipt');
+  const status = $('#receipt-export-status');
+  if (!receipt || !window.html2canvas) {
+    status.textContent = 'Receipt image export is unavailable. Check your connection and try again.';
+    return;
+  }
+  try {
+    const canvas = await html2canvas(receipt, { backgroundColor: '#fffdf8', scale: 2, logging: false });
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('PNG export did not complete.');
+    await tearReceipt();
+    const href = URL.createObjectURL(blob);
+    const link = Object.assign(document.createElement('a'), {
+      href,
+      download: `${exploreState.selected.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-itinerary.png`,
+    });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    status.textContent = 'Receipt torn free and saved as a PNG.';
+  } catch (error) {
+    console.error(error);
+    status.textContent = 'Could not create the receipt image. Try again after the page finishes loading.';
+  }
+}
+
+explorePanel.addEventListener('submit', event => {
+  if (event.target.id !== 'explore-form') return;
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const boroughs = form.getAll('borough');
+  if (!boroughs.length) {
+    $('#explore-error').textContent = 'Choose at least one borough to see your matches.';
+    return;
+  }
+  const preferences = { boroughs, terrain: form.get('terrain'), experience: form.get('experience') };
+  exploreState.matches = EXPLORE_PARKS.map(park => ({ park, score: parkScore(park, preferences) }))
+    .filter(result => preferences.boroughs.includes(result.park.borough))
+    .sort((a, b) => b.score - a.score)
+    .map(result => result.park);
+  exploreState.index = 0;
+  exploreState.selected = null;
+  renderExploreMatches();
+});
+
+explorePanel.addEventListener('click', event => {
+  const target = event.target.closest('button');
+  if (!target) return;
+  if (target.matches('[data-explore-restart]')) { exploreState.selected = null; renderExploreQuiz(); }
+  if (target.matches('[data-match-prev]') && exploreState.index > 0) { exploreState.index--; renderExploreMatches(); }
+  if (target.matches('[data-match-next]') && exploreState.index < exploreState.matches.length - 1) { exploreState.index++; renderExploreMatches(); }
+  if (target.matches('[data-choose-park]')) { exploreState.selected = exploreState.matches[exploreState.index]; renderExploreItinerary(); }
+  if (target.matches('[data-back-matches]')) renderExploreMatches();
+  if (target.matches('[data-download-itinerary]')) downloadItineraryPng();
+  if (target.matches('[data-email-itinerary]')) {
+    const subject = encodeURIComponent(`My NYC park day: ${exploreState.selected.name}`);
+    const email = `mailto:?subject=${subject}&body=${encodeURIComponent(itineraryText(exploreState.selected))}`;
+    tearReceipt().then(() => { location.href = email; });
+  }
+});
+
+explorePanel.addEventListener('pointerdown', event => {
+  if (event.target.closest('button, a')) return;
+  exploreState.touchX = event.clientX;
+});
+explorePanel.addEventListener('pointerup', event => {
+  if (exploreState.touchX === null || !explorePanel.querySelector('[data-swipe-card]')) return;
+  const delta = event.clientX - exploreState.touchX;
+  exploreState.touchX = null;
+  if (Math.abs(delta) < 55) return;
+  if (delta < 0 && exploreState.index < exploreState.matches.length - 1) exploreState.index++;
+  if (delta > 0 && exploreState.index > 0) exploreState.index--;
+  renderExploreMatches();
+});
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
 $('#propose-btn').addEventListener('click', () => setProposing(!state.proposing));
