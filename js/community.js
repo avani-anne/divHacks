@@ -616,6 +616,7 @@ const Community = {
 
   profileCard(me) {
     const v = me.volunteer || {};
+    const smsZip = this.zip || me.follows?.[0] || null;
     const notify = me.notify || { projects: true, petitions: true, reminders: true, replies: true };
     return `<section class="card">
       <h3>Your volunteer profile</h3>
@@ -632,13 +633,19 @@ const Community = {
           ${INTERESTS.map(i => `<label class="check"><input type="checkbox" name="interests" value="${esc(i)}" ${v.interests?.includes(i) ? 'checked' : ''}> ${esc(i)}</label>`).join('')}
         </fieldset>
         <label>Availability<select name="availability">${['Weekends', 'Weekday evenings', 'Weekdays', 'Flexible'].map(a => `<option ${v.availability === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
-        <label>Phone <span class="muted small">(optional, for day-of coordination)</span><input name="phone" value="${esc(v.phone || '')}" inputmode="tel"></label>
+        <fieldset class="sms-box">
+          <legend>📱 Text alerts</legend>
+          <label>Mobile phone <span class="muted small">(US)</span><input name="phone" value="${esc(v.phone || '')}" inputmode="tel" autocomplete="tel" placeholder="(212) 555-0100"></label>
+          ${smsZip ? `<label class="check"><input type="checkbox" name="sms" ${v.sms?.on && v.sms.zip === smsZip ? 'checked' : ''}> Text me alerts for ZIP <strong>${esc(smsZip)}</strong></label>
+          <p class="muted small consent">By checking this box you agree to receive text messages from Greenify NYC about green-space projects in this ZIP. Message and data rates may apply. Reply STOP to unsubscribe at any time.</p>`
+            : '<p class="muted small">Follow a ZIP code to turn on text alerts.</p>'}
+        </fieldset>
         <fieldset><legend>Send me updates about</legend>
           ${Object.entries(NOTIFY_OPTIONS).map(([k, label]) => `<label class="check"><input type="checkbox" name="notify" value="${k}" ${notify[k] ? 'checked' : ''}> ${esc(label)}</label>`).join('')}
         </fieldset>
         <button type="submit" class="btn-primary">${me.volunteer ? 'Save changes' : 'Sign me up to volunteer'}</button>
         <p class="muted small" id="profile-saved" role="status"></p>
-        <p class="muted small">Updates appear in the feed below and under 🔔 in your account menu. Email and text alerts need a server, which isn't connected yet.</p>
+        <p class="muted small">Updates appear in the feed below and under 🔔 in your account menu.</p>
       </form>
     </section>`;
   },
@@ -678,14 +685,37 @@ const Community = {
     const me = Auth.current();
     const follows = me.follows || [];
     const newzip = String(d.get('newzip') || '').trim();
+    const phone = String(d.get('phone') || '').trim();
+    const smsZip = this.zip || follows[0] || null;
+    const wantsSms = d.get('sms') === 'on' && smsZip;
+    const before = me.volunteer?.sms;
+    // Only text when alerts are newly turned on, or the number or ZIP changed.
+    const shouldText = wantsSms && !(before?.on && before.phone === phone && before.zip === smsZip);
+    if (wantsSms && !toUsPhone(phone)) {
+      $('#profile-saved').textContent = 'Enter a 10-digit US mobile number to get text alerts.';
+      return;
+    }
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+
+    let smsNote = '';
+    let sms = wantsSms ? { on: true, phone, zip: smsZip, at: Date.now() } : null;
+    if (shouldText) {
+      const result = await sendWelcomeText(phone, smsZip);
+      if (result.ok) smsNote = ` We texted ${result.to}.`;
+      else { smsNote = ` But the text couldn't be sent: ${result.error}`; sms = before || null; }
+    }
+    const nextFollows = [...follows];
+    if (/^\d{5}$/.test(newzip) && !nextFollows.includes(newzip)) nextFollows.push(newzip);
+    if (wantsSms && !nextFollows.includes(smsZip)) nextFollows.push(smsZip);
     await Auth.updateProfile({
-      volunteer: { interests: d.getAll('interests'), availability: d.get('availability'), phone: String(d.get('phone')).trim(), since: me.volunteer?.since || Date.now() },
+      volunteer: { interests: d.getAll('interests'), availability: d.get('availability'), phone, sms, since: me.volunteer?.since || Date.now() },
       notify,
-      follows: /^\d{5}$/.test(newzip) && !follows.includes(newzip) ? [...follows, newzip] : follows,
+      follows: nextFollows,
     });
     this.renderView();
     const note = $('#profile-saved');
-    if (note) note.textContent = '✓ Saved. Thanks for volunteering!';
+    if (note) note.textContent = `✓ Saved. Thanks for volunteering!${smsNote}`;
   },
 
   async follow(zip, add) {
@@ -1008,4 +1038,27 @@ function partnerPopup(p) {
     ${p.linked ? `<div class="small">${p.linked} project${p.linked > 1 ? 's' : ''} here</div>` : ''}
     <div class="small">💡 ${esc(k.idea)}</div>
     <button type="button" class="btn-primary btn-sm" data-action="partner-propose" data-uid="${esc(p.uid)}">Propose a green space here</button></div>`;
+}
+
+// US numbers only, e.g. (212) 555-0100 → +12125550100.
+function toUsPhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return null;
+}
+
+// Asks the send-welcome-sms Edge Function (supabase/functions) to text the confirmation.
+// Twilio credentials live only in that function's secrets.
+async function sendWelcomeText(phone, zip) {
+  try {
+    const { data, error } = await sb.functions.invoke('send-welcome-sms', { body: { phone, zip } });
+    if (!error) return data;
+    const detail = await error.context?.json?.().catch(() => null);
+    if (detail?.error) return { ok: false, error: detail.error };
+    if (/Failed to send a request|not found|404/i.test(error.message)) return { ok: false, error: "text alerts aren't set up yet (the send-welcome-sms function isn't deployed)." };
+    return { ok: false, error: error.message };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 }

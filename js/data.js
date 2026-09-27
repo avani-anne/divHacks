@@ -392,4 +392,26 @@ const Data = {
       lng: Number(r.longitude),
     }));
   },
+
+  // Live air quality (updated hourly) from Open-Meteo's air-quality model (CAMS). No key needed.
+  // It's a regional model with cells roughly 10 km across, so it describes the area's air right
+  // now rather than block-by-block differences. Accepts one or many [lng, lat] points.
+  async currentAir(points) {
+    const url = new URL('https://air-quality-api.open-meteo.com/v1/air-quality');
+    url.searchParams.set('latitude', points.map(p => p[1].toFixed(4)).join(','));
+    url.searchParams.set('longitude', points.map(p => p[0].toFixed(4)).join(','));
+    url.searchParams.set('current', 'us_aqi,pm2_5,ozone,nitrogen_dioxide');
+    url.searchParams.set('timezone', 'America/New_York');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo request failed: ${res.status}`);
+    const json = await res.json();
+    return [].concat(json).map((r, i) => ({
+      point: points[i],
+      aqi: r.current?.us_aqi ?? null,
+      pm25: r.current?.pm2_5 ?? null,
+      ozone: r.current?.ozone ?? null,          // µg/m³
+      no2: r.current?.nitrogen_dioxide ?? null, // µg/m³
+      time: r.current?.time || null,            // local time, e.g. 2026-09-26T22:00
+    }));
+  },
 };

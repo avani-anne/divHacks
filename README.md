@@ -1,66 +1,139 @@
-# NYC Green Space Planner
-A web app for deciding where New York City needs more green space, and helping neighbors make it happen.
+# 🍁 Greenify NYC
 
-Enter an NYC ZIP code to see every park, natural area, community garden and street tree in the neighborhood. The app then shows where residents are farthest from a park, suggests what could be built on a specific spot, and lets the community organize around it.
+**A green space planner for New York City.** Pick a neighborhood to see its parks, trees, gardens, air quality and income, find the places that are farthest from green space, get ideas for greening a specific spot, and organize neighbors, schools and community partners to build it.
 
-Built for divHacks. Map data comes live from [NYC Open Data](https://opendata.cityofnewyork.us/). Accounts, saved sites, petitions and volunteering are stored in [Supabase](https://supabase.com/).
+**Live site:** https://greenify-nyc.vercel.app · Built for divHacks
 
-## Features
+- **Map data** comes live from [NYC Open Data](https://opendata.cityofnewyork.us/) and other open sources. There's no server of our own.
+- **Accounts, saved sites, petitions and volunteering** are stored in [Supabase](https://supabase.com/).
 
-### 🗺️ Map
-- An interactive map with street and satellite views. The chosen ZIP is outlined and everything outside it is dimmed.
-- Layers you can switch on or off: parks, natural areas (Forever Wild, the data behind the NYC Nature Map), GreenThumb community gardens, street trees, and **access gaps** (areas more than a 5- or 10-minute walk from a park).
-- **Air quality** layer: fine-particle pollution (PM2.5) shaded by community district.
-- **Median income** layer: median household income shaded by ZIP, from the Census Bureau's American Community Survey.
-- **3D view**: a tilted map with 3D buildings, parks, gardens and proposed sites.
-- A **neighborhood profile** for the ZIP:
-  - plant species
-  - green space (acres and % of the ZIP)
-  - street trees
-  - estimated CO₂ captured per year
-  - air quality index
-  - community gardens
-  - share of the ZIP within a 5- or 10-minute walk of a park
-  - park acres per 1,000 residents, compared with the city's 2.5-acre goal
-  - largest parks, most common trees and pollutant levels
-- **Propose a green space:** drop pins for candidate sites. Each one shows its impact on park access, and the access figures update live. Press **Save** to keep a site in your account (you'll be asked to log in). Saved sites are listed in the account menu and can be exported as GeoJSON.
+---
 
-### 🌱 Build Ideas
-Ask *"I want to [goal] using [kind of space] at [this spot]."* The answer includes:
-- **Estimated sunlight** (full sun, part sun or shade), based on the heights of the buildings to the south.
-- **Places to build nearby,** from real city data:
-  - empty street-tree beds, with how to request a free tree
-  - bus shelters, for green "bee bus stop" roofs
-  - vacant lots, with size and whether the city owns them
-  - existing community gardens
-- **Plant suggestions** from a curated list of about 30 plants that are native to or proven in NYC, matched to the light, the space and the goal.
-- A **Start a petition** button that carries the site over to the Community tab.
+## At a glance
 
-### ✊ Community
-- **Petitions & projects:** start a petition (with who it's addressed to and a signature goal) or a volunteer project (with a date and number of volunteers needed), and pin it on a map or use one of your saved sites. Every item has a discussion thread. The section also lists **vacant lots in the ZIP** (city-owned first), each with a "Start petition" button.
-- **Where it's growing:** a map of active projects, petitions gathering signatures, active GreenThumb gardens and your saved sites, with filters.
-- **Volunteer:** open volunteer opportunities in the ZIP with one-click sign-up, petitions that need signatures, and your **volunteer profile** (ZIP codes you follow, interests, availability, which updates you want). An **updates feed** covers new projects and petitions in followed ZIPs, reminders before projects you joined, new volunteers on your projects, petition milestones and discussion replies. Unread updates show as a badge on your avatar.
-- Links to official programs: NYC Parks volunteering, GreenThumb, NYC Service and Trees New York.
+| Tab | What it's for | Main data |
+| --- | --- | --- |
+| **🗺️ Map** | Understand a neighborhood's green space and find the gaps | NYC Parks, Forever Wild (Nature Map), GreenThumb, 2015 Street Tree Census, Air Quality, Census income |
+| **🌱 Build Ideas** | Ask how to green one specific spot | Forestry Planting Spaces, Bus Stop Shelters, PLUTO vacant lots, building heights, KartaView street photos |
+| **✊ Community** | Organize: petitions, projects, partners, volunteers | Supabase (user data), Facilities Database (partner sites), PLUTO, GreenThumb |
 
-### 🔐 Accounts
-- Sign up or log in from the top bar. You need an account to save proposed sites, start petitions or projects, sign petitions, volunteer and post in discussions.
-- **Each account can sign a petition only once** and join a project only once.
+---
 
-> Accounts and community data are stored in **Supabase** (Postgres + Auth). Access rules in [`supabase/schema.sql`](supabase/schema.sql) are enforced by the database: one signature and one project sign-up per account, names come from the account, saved sites are private, and volunteer contact details are visible only to the organizer.
+## 🏠 Landing page
 
-## Set up Supabase (once)
+- The **Greenify logo** (a maple leaf with "greenify" in script across it) and a ZIP code search box.
+- Example ZIP buttons to try: Harlem, Williamsburg, South Bronx, Forest Hills, St. George.
+- The top bar has the smiling-leaf mascot, the three tabs, a ZIP box and the **Log in** button.
 
-1. Create a Supabase project.
-2. In **SQL Editor**, run [`supabase/schema.sql`](supabase/schema.sql). It creates the tables, triggers and row-level security policies, and is safe to re-run.
-3. Put the project URL and **publishable (anon) key** in [`js/config.js`](js/config.js). Never use the secret or service_role key in the site.
-4. Under **Authentication → URL Configuration**, add the site's address (e.g. `http://localhost:8000` and your hosted URL) so confirmation and password-reset links return to the app.
-5. Optional: turn off **Confirm email** under Authentication → Sign In / Providers → Email so new accounts can log in immediately. Supabase's built-in email is heavily rate-limited, so set up custom SMTP before relying on confirmation emails.
+## 🗺️ Map tab
 
-Google Street View is an optional map view. To enable it, add a Google Maps Platform API key to `GOOGLE_MAPS_API_KEY` in [`js/config.js`](js/config.js), enable Maps JavaScript API for the key, and restrict it to the site's allowed referrers. Google may require billing to be enabled.
+**What you can do**
+- **Pick a neighborhood** in any of these ways:
+  - type a ZIP (top bar, or **Change ZIP** in the sidebar)
+  - **click an area outside the current ZIP** to load that ZIP
+  - **double-click** to clear the selection and just explore the map, then click anywhere to load a ZIP
+  - link straight to one, e.g. `/#zip=10027`
+- **Background maps:** Streets, Light (gray) or Satellite.
+- **Layers** to switch on or off:
+  - **Parks** and **natural areas** (the protected "Forever Wild" areas behind the NYC Nature Map)
+  - **Community gardens** and **street trees**
+  - **Access gaps:** the parts of the ZIP more than a 5- or 10-minute walk from a usable park
+  - **Air quality now:** live US AQI, updated hourly (regional model, about 10 km areas)
+  - **Air pollution, yearly average:** fine-particle pollution (PM2.5) by community district, the best source for comparing neighborhoods
+  - **Median income:** household income by ZIP
+  - **3D view:** tilted 3D buildings with parks, gardens and your sites.
+- **Map | 3D | Street View** switch on the map. **Street View** opens Google Street View at the map's center, so you can walk the streets like in Google Maps. It needs a Google Maps API key in `js/config.js` (see below).
+- **Neighborhood profile** in the sidebar:
+  - plant (street-tree) species, street trees, and estimated CO₂ captured per year
+  - green space in acres and as a share of the ZIP
+  - **air quality right now** (live US AQI, PM2.5, ozone and NO₂), plus yearly neighborhood averages
+  - number of community gardens
+  - share of the ZIP within a 5- and 10-minute walk of a park
+  - park acres per 1,000 residents, against the city's 2.5-acre goal
+  - largest parks, most common trees, and median household income
+- **Propose a green space:** drop pins on candidate sites. Each pin shows:
+  - its access impact ("fills a gap" or not) and the nearest park
+  - a **See it in Street View** link
 
-## Run it
+  The walk-access figures update to include your pins. Press **Save** to keep a site in your account; saved sites appear in the account menu and can be exported as GeoJSON.
 
-It's a static site with no build step. Serve the folder:
+**Datasets used**
+
+| Feature | Source |
+| --- | --- |
+| ZIP boundaries, population, click-to-find-ZIP | NYC Modified ZIP Code Tabulation Areas, `pri4-ifjk` |
+| Parks | NYC Parks Properties, `enfh-gkve` |
+| Natural areas | NYC Parks Forever Wild, `48va-85tp` (the NYC Nature Map's natural-areas data) |
+| Community gardens | GreenThumb Garden Info, `p78i-pat6` |
+| Street trees, species, CO₂ estimate | 2015 Street Tree Census, `uvpi-gqnh` |
+| Air quality now (live) | [Open-Meteo air-quality API](https://open-meteo.com/en/docs/air-quality-api) (Copernicus CAMS model), updated hourly, no key |
+| Air pollution, yearly average | NYC Air Quality, `c3uy-2p5r`, joined to Community Districts, `5crt-au7u` |
+| Median household income | Census ACS 5-year (2020–2024), table B19013, via the [Census Reporter API](https://censusreporter.org/) |
+| Background maps | Esri World Street Map, Light Gray Canvas and World Imagery |
+| 3D buildings | [OpenFreeMap](https://openfreemap.org/) vector tiles, drawn with MapLibre GL |
+
+## 🌱 Build Ideas tab
+
+**What you can do**
+- **Ask a question:** "I want to *[attract bees and butterflies / grow food / cool the block / soak up stormwater / keep it low-maintenance]* using *[whatever fits best / a street tree bed / a bus stop / a vacant lot / a rooftop / a yard or schoolyard / a planter]* at *[the pinned spot]*." Pick the spot by clicking the map (in 2D or 3D) or with **Use my location**.
+- **Get an answer:**
+  - **Estimated sunlight** (full sun, part sun or shade), worked out from the heights of buildings to the south, plus the distance to the nearest park.
+  - **Street-level photos** of the spot, with date, distance and camera direction. Click one to enlarge it and see where it was taken. There's also an **Open in Google Street View** button.
+  - **Places to build nearby**, with step-by-step how-tos and links:
+    - empty street-tree beds (request a free street tree)
+    - bus shelters (a green "bee bus stop" roof)
+    - vacant lots, with size and whether the city owns them
+    - nearby community gardens
+    - rooftops, rain gardens and planters
+  - **Plant picks** from a curated list of about 30 plants that are native to or proven in NYC, matched to the light, the space and the goal.
+  - **Start a petition** for a lot or bus stop, which carries the details over to the Community tab.
+- **Map key** in the corner explains each marker color, and the **🏙️ 3D view** button shows everything among 3D buildings.
+
+**Datasets used**
+
+| Feature | Source |
+| --- | --- |
+| Empty street-tree beds | NYC Parks Forestry Planting Spaces, `82zj-84is` |
+| Nearest address | Forestry Planting Spaces, `82zj-84is` |
+| Bus shelters | NYC DOT Bus Stop Shelters, `t4f2-8md7` |
+| Vacant lots, lot size, owner | PLUTO tax lots, `64uk-42ks` (lots with land use "vacant land") |
+| Sunlight estimate | Building footprints with roof heights, `5zhs-2jue` |
+| Community gardens, nearest park | GreenThumb, `p78i-pat6`; NYC Parks Properties, `enfh-gkve` |
+| Street-level photos | [KartaView](https://kartaview.org) (open, CC BY-SA 4.0), plus links to Google Street View |
+| Plants | Curated list in `js/plants.js` |
+
+## ✊ Community tab
+
+Four sections. You can browse everything without an account; starting, signing, joining and posting require logging in.
+
+1. **Petitions & projects**
+   - Start a **petition**, with who it's addressed to and a signature goal, or a **volunteer project**, with a date and number of volunteers needed.
+   - Pin it on a map, or use one of your saved sites.
+   - Every item has a **discussion thread**.
+   - **Each account can sign a petition once and join a project once.**
+   - Also lists **vacant lots in the ZIP** (city-owned first), each with a "Start petition" button.
+2. **Where it's growing:** a map of active projects, petitions gathering signatures, active community gardens, partner sites and your saved sites, with filters and a 3D view.
+3. **Partner sites:** schools, senior centers, nursing homes, homeless-services sites (drop-in centers and Homebase offices) and food pantries in the ZIP. Each card:
+   - suggests a fitting green space: a schoolyard garden, an accessible sensory garden, shaded seating or a donation garden
+   - has **Propose a green space here**, which starts a project pinned at the site and tagged with the partner
+   - has **Tag my project**, to link one of your existing projects
+   - has **Find contact** to look the site up
+4. **Volunteer**
+   - Open volunteer opportunities in the ZIP, with one-click sign-up.
+   - Petitions that need signatures.
+   - Your **volunteer profile**: ZIP codes you follow, interests, availability, and which updates you want.
+   - **📱 Text alerts:** enter a US mobile number and opt in. You'll get a confirmation text: "Thank you for signing up for notifications for Greenify NYC. You are entered for ZIP code XXXXX." It's sent through Twilio from a Supabase Edge Function (see setup below).
+   - An **updates feed** (also under 🔔 in the account menu): new projects and petitions in followed ZIPs, reminders before projects you joined, new volunteers on your projects, petition milestones and discussion replies.
+   - Links to official programs: NYC Parks volunteering, GreenThumb, NYC Service and Trees New York.
+
+**Datasets used**
+
+| Feature | Source |
+| --- | --- |
+| Petitions, projects, signatures, volunteers, messages, profiles, saved sites | Supabase database (see `supabase/`) |
+| Partner sites | NYC City Planning Facilities Database, `ji82-xba5` |
+| Vacant lots | PLUTO, `64uk-42ks` |
+| Active community gardens | GreenThumb, `p78i-pat6` |
 
 **Privacy:** supportive-housing residences are left out of partner sites, and the city doesn't publish homeless shelter addresses, so they aren't shown. Volunteers' contact details are visible only to the project organizer.
 
@@ -116,6 +189,26 @@ python3 -m http.server 8765
    - add every address the site runs on to **Redirect URLs**, e.g. `https://greenify-nyc.vercel.app/**` and `http://localhost:8765/**`
 5. Optional: turn off **Confirm email** so new accounts can log in straight away. Supabase's built-in email is heavily rate-limited, so set up your own email provider (SMTP) before relying on confirmation emails.
 
+## Set up text alerts (optional)
+
+Texts are sent by the `send-welcome-sms` Supabase Edge Function through [Twilio](https://www.twilio.com). The Twilio credentials live only in Supabase secrets, never in the site.
+
+1. Run [`supabase/003_sms_alerts.sql`](supabase/003_sms_alerts.sql) in the SQL Editor. It adds the `sms_log` table, used to limit each account to 3 texts a day.
+2. In Twilio:
+   - create an account and get a phone number
+   - note the **Account SID** and **Auth Token**
+   - on a trial account, verify the phone numbers you'll text
+3. In Supabase → **Edge Functions**, deploy a new function named `send-welcome-sms` with the code from [`supabase/functions/send-welcome-sms/index.ts`](supabase/functions/send-welcome-sms/index.ts). Keep JWT verification on.
+4. In Supabase → **Edge Functions → Secrets**, add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM_NUMBER` (the Twilio number in `+1…` format).
+
+Texting the public in the US also requires registering your sender with Twilio (A2P 10DLC or toll-free verification), which can take days.
+
+## Set up Street View (optional)
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), enable the **Maps JavaScript API** and create an API key. A billing account is required, though there's a free monthly allowance.
+2. **Restrict the key** to your site's addresses (HTTP referrers such as `https://greenify-nyc.vercel.app/*` and `http://localhost:8765/*`) and to the Maps JavaScript API only.
+3. Put it in `GOOGLE_MAPS_API_KEY` in [`js/config.js`](js/config.js). Without a key, the Street View button explains that it isn't set up yet.
+
 ## Deploy
 
 The site is deployed on **Vercel** from this GitHub repo, with no build command and the output in the repo root. Every push to `main` redeploys. It also works on any static host, such as GitHub Pages or Netlify.
@@ -123,22 +216,25 @@ The site is deployed on **Vercel** from this GitHub repo, with no build command 
 ## Project structure
 
 ```
-supabase/schema.sql Database tables, triggers and access rules
-index.html          Page layout: landing screen and the three tabs
-css/styles.css      All styles
-assets/logo.svg     Tree logo
-js/data.js          NYC Open Data queries
-js/analysis.js      Calculations: area, walk access, AQI, carbon, sunlight (Turf.js)
-js/app.js           Map tab, neighborhood profile, overlays, proposals, tabs and routing
-js/map3d.js         3D view (MapLibre GL, loaded on demand)
-js/streetview.js    Optional Google Street View panorama (loaded on demand)
-js/plants.js        Curated NYC plant list and recommender
-js/advisor.js       Build Ideas tab
-js/config.js        Supabase URL and publishable key
-js/store.js         Community data store (Supabase)
-js/auth.js          Accounts, login dialog and account menu (Supabase Auth)
-js/community.js     Community tab: petitions, growing map, volunteering and updates
-js/main.js          Startup
+index.html              Page layout: landing page, three tabs, dialogs
+css/styles.css          All styles
+assets/leaf-mascot.svg  Smiling maple-leaf mascot (top bar and favicon)
+js/config.js            Supabase URL and publishable key
+js/data.js              All data queries (NYC Open Data, Census Reporter, KartaView)
+js/analysis.js          Calculations: area, walk access, AQI, carbon, sunlight (Turf.js)
+js/app.js               Map tab: profile, layers, click-to-select ZIPs, proposals, tabs, routing
+js/map3d.js             Reusable 3D view (MapLibre GL, loaded on demand)
+js/streetview.js        Google Street View for the Map tab (needs an API key)
+js/plants.js            Curated NYC plant list and recommender
+js/advisor.js           Build Ideas tab, street photos
+js/store.js             Community data store (Supabase)
+js/auth.js              Accounts, login dialog, account menu (Supabase Auth)
+js/community.js         Community tab: petitions, growing map, partner sites, volunteering
+js/main.js              Startup
+supabase/schema.sql     Database tables, triggers and access rules
+supabase/002_partner_sites.sql  Migration adding partner-site fields
+supabase/003_sms_alerts.sql     Migration adding the text-alert log
+supabase/functions/send-welcome-sms/  Edge Function that sends the confirmation text (Twilio)
 ```
 
 Libraries (loaded from CDNs): [Leaflet](https://leafletjs.com/) for 2D maps, [MapLibre GL](https://maplibre.org/) for 3D, [Turf.js](https://turfjs.org/) for geometry, and [supabase-js](https://supabase.com/docs/reference/javascript) for accounts and data. Fonts: DM Sans, Fraunces and Dancing Script (Google Fonts).

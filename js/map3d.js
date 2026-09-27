@@ -74,8 +74,9 @@ class View3D {
         if (!hits.length) this.onClick?.([e.lngLat.lng, e.lngLat.lat]);
       });
       await new Promise(r => this.map.once('load', r));
-      if (!this.active) return;
+      this.ready = true;
       this.styleBuildings();
+      if (!this.active) return;
     } else {
       this.map.resize();
       this.map.jumpTo(camera);
@@ -164,9 +165,8 @@ const Map3D = new View3D({
   leaflet: () => map,
   onToggle: on => {
     $('#propose-btn').hidden = on;
-    const btn = $('#map3d-btn');
-    btn.innerHTML = on ? '🗺️ 2D map' : '🏙️ 3D view';
-    btn.classList.toggle('on', on);
+    if (on) markMapView('3d');
+    else if (!StreetView.active) markMapView('map');
   },
   layers: () => {
     if (!state.zipFeature) return [];
