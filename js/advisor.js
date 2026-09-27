@@ -62,14 +62,17 @@ const Advisor = {
   init() {
     this.map = L.map('advisor-map', { zoomControl: false }).setView([40.73, -73.95], 12);
     L.control.zoom({ position: 'topright' }).addTo(this.map);
-    const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(this.map);
-    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19, attribution: 'Imagery &copy; Esri',
-    });
-    L.control.layers({ Map: streets, Satellite: satellite }, null, { position: 'topright' }).addTo(this.map);
+    addBasemaps(this.map);
     this.layers = L.layerGroup().addTo(this.map);
+    this.addLegend();
+    this.photoLayer = L.layerGroup().addTo(this.map);
+    this.view3d = new View3D({
+      container: 'advisor-map3d',
+      leaflet: () => this.map,
+      layers: () => this.layers3d(),
+      onClick: point => this.select(point),
+    });
+    add3DToggle($('#advisor-wrap'), this.view3d);
     this.map.on('click', e => this.select([e.latlng.lng, e.latlng.lat]));
 
     const panel = $('#advisor-panel');
@@ -84,7 +87,11 @@ const Advisor = {
       if (!btn) return;
       if (btn.dataset.action === 'locate') this.locate();
       if (btn.dataset.action === 'petition') Community.startPetition(JSON.parse(btn.dataset.prefill));
-      if (btn.dataset.action === 'fly') this.map.flyTo([+btn.dataset.lat, +btn.dataset.lng], 18);
+      if (btn.dataset.action === 'fly') {
+        this.map.flyTo([+btn.dataset.lat, +btn.dataset.lng], 18);
+        if (this.view3d.active) this.view3d.flyTo([+btn.dataset.lng, +btn.dataset.lat], 18);
+      }
+      if (btn.dataset.action === 'photo') this.showPhoto(+btn.dataset.index);
       if (btn.dataset.action === 'designer-add') this.addDesignerPlant(btn.dataset.index);
       if (btn.dataset.action === 'designer-remove') this.removeDesignerPlant(btn.dataset.id);
       if (btn.dataset.action === 'designer-reset') this.resetDesigner();
@@ -129,6 +136,31 @@ const Advisor = {
     this.renderAsk();
   },
 
+  // Map key: what each dot means and which dataset it comes from.
+  addLegend() {
+    const Legend = L.Control.extend({
+      options: { position: 'bottomleft' },
+      onAdd() {
+        const el = L.DomUtil.create('div', 'map-key');
+        el.innerHTML = `
+          <details ${window.innerWidth > 820 ? 'open' : ''}>
+            <summary>Map key</summary>
+            <ul>
+              <li><span class="key-pin">?</span><div><strong>Your spot</strong><small>Dashed circle = 250 m (about a 3-minute walk)</small></div></li>
+              <li><i style="background:#8a5a2b"></i><div><strong>Empty street-tree bed</strong><small>NYC Parks Forestry Planting Spaces</small></div></li>
+              <li><i style="background:#2b6cb0"></i><div><strong>Bus shelter</strong><small>NYC DOT Bus Stop Shelters</small></div></li>
+              <li><i style="background:#c0392b"></i><div><strong>Vacant lot</strong><small>PLUTO tax lots marked “vacant land” (NYC Planning)</small></div></li>
+              <li><i style="background:${COLORS.garden}"></i><div><strong>Community garden</strong><small>NYC Parks GreenThumb</small></div></li>
+            </ul>
+          </details>`;
+        L.DomEvent.disableClickPropagation(el);
+        L.DomEvent.disableScrollPropagation(el);
+        return el;
+      },
+    });
+    new Legend().addTo(this.map);
+  },
+
   locate() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -166,8 +198,13 @@ const Advisor = {
   async select(point, fly) {
     const token = ++this.token;
     this.point = point;
+    this.context = null;
+    this.photos = null;
     const [lng, lat] = point;
     if (fly) this.map.flyTo([lat, lng], 17);
+    if (fly && this.view3d.active) this.view3d.flyTo(point);
+    this.photoLayer.clearLayers();
+    this.view3d.sync();
     this.layers.clearLayers();
     L.circle([lat, lng], { radius: 250, color: COLORS.proposal, weight: 1.5, dashArray: '4 4', fillOpacity: 0.04, interactive: false }).addTo(this.layers);
     L.marker([lat, lng], {
@@ -214,10 +251,94 @@ const Advisor = {
       };
       this.drawContext();
       this.renderAnswer();
+      this.view3d.sync();
+      this.loadPhotos(token);
     } catch (err) {
       console.error(err);
       if (token === this.token) $('#adv-answer').innerHTML = `<p class="muted">Couldn't load data for this spot. Try again in a moment.</p>`;
     }
+  },
+
+  // Same markers as the 2D map, for the 3D view.
+  layers3d() {
+    const out = [];
+    if (state.zipFeature) out.push({ id: 'adv-zip', type: 'line', data: state.zipFeature, paint: outlinePaint });
+    if (!this.point) return out;
+    const c = this.context;
+    const pts = (arr, props) => turf.featureCollection((arr || []).map(x => turf.point([x.lng, x.lat], props(x))));
+    out.push(
+      { id: 'adv-radius', type: 'line', data: turf.circle(this.point, 0.25, { units: 'kilometers', steps: 64 }), paint: { 'line-color': COLORS.proposal, 'line-width': 2, 'line-dasharray': [2, 2] } },
+      { id: 'adv-beds', type: 'circle', data: pts(c?.beds, b => ({ label: 'Empty tree bed', name: b.address })), paint: dotPaint('#8a5a2b', 5), popup: popup3d },
+      { id: 'adv-shelters', type: 'circle', data: pts(c?.shelters, s => ({ label: 'Bus shelter', name: s.name })), paint: dotPaint('#2b6cb0', 7), popup: popup3d },
+      { id: 'adv-lots', type: 'circle', data: pts(c?.lots, l => ({ label: 'Vacant lot', name: `${titleCase(l.address)} · ${fmt(l.sqft)} sq ft` })), paint: dotPaint('#c0392b', 7), popup: popup3d },
+      { id: 'adv-gardens', type: 'circle', data: pts(c?.gardens.slice(0, 10), g => ({ label: 'Community garden', name: g.name })), paint: dotPaint(COLORS.garden, 7), popup: popup3d },
+      { id: 'adv-pin', type: 'circle', data: turf.point(this.point, { label: 'Your spot', name: c?.address || 'Pinned spot' }), paint: { ...dotPaint(COLORS.proposal, 10), 'circle-stroke-width': 3 }, popup: popup3d },
+    );
+    return out;
+  },
+
+  // ---------- Street-level photos ----------
+
+  async loadPhotos(token) {
+    const el = () => $('#street-photos');
+    try {
+      const photos = await Data.streetPhotos(this.point);
+      if (token !== this.token) return;
+      this.photos = photos;
+    } catch (err) {
+      console.error(err);
+      if (token !== this.token) return;
+      this.photos = [];
+    }
+    if (el()) el().innerHTML = this.photosHtml();
+  },
+
+  photosHtml() {
+    const [lng, lat] = this.point;
+    const google = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+    const googleLink = `<a class="btn-secondary btn-green sv-google" href="${google}" target="_blank" rel="noopener">Open in Google Street View ↗</a>`;
+    if (this.photos == null) return `<p class="muted small"><span class="spinner spinner-sm"></span> Looking for street photos…</p>${googleLink}`;
+    if (!this.photos.length) return `<p class="muted small">No open street photos within 80 m of this spot.</p>${googleLink}`;
+    return `
+      <div class="photo-strip">${this.photos.map((p, i) => `
+        <button type="button" class="photo" data-action="photo" data-index="${i}">
+          <img src="${esc(p.thumb)}" alt="Street photo ${fmt(p.dist)} m away" loading="lazy">
+          <span>${esc(photoDate(p.date))} · ${fmt(p.dist)} m${p.heading != null ? ` · facing ${compass(p.heading)}` : ''}</span>
+        </button>`).join('')}
+      </div>
+      <p class="muted small photo-credit">Photos: <a href="https://kartaview.org" target="_blank" rel="noopener">KartaView</a> contributors (CC BY-SA 4.0). They may be several years old.</p>
+      ${googleLink}`;
+  },
+
+  showPhoto(i) {
+    const p = this.photos?.[i];
+    if (!p) return;
+    this.photoLayer.clearLayers();
+    L.marker([p.lat, p.lng], {
+      icon: L.divIcon({ className: 'camera-pin', html: `<span style="transform: rotate(${p.heading ?? 0}deg)">▲</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+      zIndexOffset: 900,
+    }).addTo(this.photoLayer);
+    const dlg = $('#community-dialog');
+    dlg.innerHTML = `<button type="button" class="dlg-close" data-action="close" aria-label="Close">×</button>
+      <div class="photo-view">
+        <img src="${esc(p.full)}" alt="Street-level photo near the pinned spot">
+        <div class="photo-meta">
+          <span>📷 ${esc(photoDate(p.date))} · ${fmt(p.dist)} m from your pin${p.heading != null ? ` · camera facing ${compass(p.heading)}` : ''}</span>
+          <span class="photo-nav">
+            <button type="button" class="btn-secondary" data-photo-step="-1" ${i === 0 ? 'disabled' : ''}>‹ Prev</button>
+            <button type="button" class="btn-secondary" data-photo-step="1" ${i === this.photos.length - 1 ? 'disabled' : ''}>Next ›</button>
+          </span>
+        </div>
+        <p class="muted small">Photo by KartaView contributors (CC BY-SA 4.0). <a href="${esc(p.link)}" target="_blank" rel="noopener">View on KartaView ↗</a></p>
+      </div>`;
+    dlg.classList.add('dialog-wide');
+    dlg.onclick = e => {
+      if (e.target === dlg || e.target.closest('[data-action=close]')) return dlg.close();
+      const step = e.target.closest('[data-photo-step]');
+      if (step) this.showPhoto(i + Number(step.dataset.photoStep));
+    };
+    dlg.onclose = () => { dlg.classList.remove('dialog-wide'); dlg.onclick = null; };
+    if (!dlg.open) dlg.showModal();
   },
 
   drawContext() {
@@ -270,6 +391,9 @@ const Advisor = {
         <div class="fact ${gap ? 'fact-gap' : ''}"><span class="fact-icon">🌳</span><div><strong>${Number.isFinite(parkDist) ? `${fmt(parkDist)} m to a park` : 'No park nearby'}</strong><span>${gap ? 'Park access gap: new green space here helps most.' : esc(c.nearestPark.name || '')}</span></div></div>
       </div>
       <p class="muted small sun-why">${esc(sunWhy)}${c.sun.roofHeightFt != null ? ` This spot is on a roof about ${fmt(c.sun.roofHeightFt)} ft up.` : ''}</p>
+
+      <h3 class="answer-h">What it looks like from the street</h3>
+      <div id="street-photos">${this.photosHtml()}</div>
 
       <h3 class="answer-h">Places to build around here</h3>
       <div class="opps">${opportunities.map(o => this.oppCard(o, o.key === space)).join('')}</div>
@@ -466,6 +590,7 @@ const Advisor = {
               <div class="small">${l.publicOwner ? '<span class="tag tag-public">Public</span>' : '<span class="tag">Private</span>'} ${esc(titleCase(l.owner))}</div>
               ${petitionBtn({ siteType: 'Vacant lot', location: `${titleCase(l.address)} (${fmt(l.sqft)} sq ft, BBL ${l.bbl})`, target: l.publicOwner ? 'NYC Parks / GreenThumb' : 'Property owner', title: `Turn ${titleCase(l.address)} into a community green space`, lat: l.lat, lng: l.lng, zip: l.zip || c.zip })}
             </li>`).join('')}</ul>
+          <p class="muted small">Where these come from: <strong>PLUTO</strong>, NYC Department of City Planning's database of every tax lot in the city. These are lots whose land use is recorded as <em>vacant land</em>. The data can lag reality, so some may now be parking, construction or fenced off. Check the site in person.</p>
           <p>City-owned lots can become community gardens through GreenThumb. For private lots, ask the owner about a temporary garden agreement.</p>
           <div class="opp-links"><a href="${LINKS.greenthumb}" target="_blank" rel="noopener">GreenThumb ↗</a></div>`
           : '<p>No vacant lots are recorded within walking distance of this pin.</p>',
@@ -505,7 +630,7 @@ const Advisor = {
   },
 };
 
-const KEEP_UPPER = new Set(['NYC', 'NYS', 'HPD', 'DCAS', 'DOT', 'DEP', 'MTA', 'LLC', 'LP', 'II', 'III']);
+const KEEP_UPPER = new Set(['NYC', 'NYS', 'HPD', 'DCAS', 'DOT', 'DEP', 'MTA', 'LLC', 'LP', 'II', 'III', 'PS', 'IS', 'MS', 'JHS', 'HS', 'KIPP', 'NYCHA', 'YMCA', 'YWCA', 'CUNY', 'SUNY', 'DOE', 'PAL', 'NORC', 'HDFC', 'STEM', 'UFT']);
 
 function titleCase(s) {
   return String(s || '').toLowerCase()
@@ -513,4 +638,14 @@ function titleCase(s) {
     .replace(/\b(\d+)(St|Nd|Rd|Th)\b/g, (m, n, suf) => n + suf.toLowerCase())
     .replace(/\b[A-Za-z]+\b/g, w => (KEEP_UPPER.has(w.toUpperCase()) ? w.toUpperCase() : w))
     .replace(/(?!^)\b(Of|And|The|For|At|On)\b/g, w => w.toLowerCase());
+}
+
+const popup3d = p => `<div class="pop"><div class="pop-kicker">${esc(p.label)}</div><strong>${esc(p.name || '')}</strong></div>`;
+
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const compass = deg => COMPASS[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+
+function photoDate(s) {
+  const d = new Date(String(s).replace(' ', 'T'));
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }

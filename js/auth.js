@@ -17,7 +17,7 @@ const Auth = {
       await this._load(data.session?.user || null);
     })();
     sb.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') setTimeout(() => AuthUI.open({ mode: 'reset' }), 0);
+      if (event === 'PASSWORD_RECOVERY') setTimeout(() => AuthUI.showRecovery(), 0);
       if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') return;
       if ((session?.user?.id || null) === (this.user?.id || null)) return;
       // Supabase warns against awaiting other Supabase calls inside this callback.
@@ -143,7 +143,26 @@ const AuthUI = {
     const dlg = $('#auth-dialog');
     this.render(mode, reason);
     if (!dlg.open) dlg.showModal();
+    dlg.querySelector('#auth-form input')?.focus();
     return new Promise(resolve => { this.resolve = resolve; });
+  },
+
+  // Opened when someone arrives from a password-reset email link.
+  showRecovery() {
+    if (this.recoveryShown) return;
+    this.recoveryShown = true;
+    this.open({ mode: 'reset' });
+  },
+
+  // An email link came back with an error (usually expired or already used).
+  showLinkError(redirect) {
+    const expired = /expired|invalid/i.test(`${redirect.errorCode} ${redirect.error}`);
+    this.open({
+      mode: 'forgot',
+      reason: expired
+        ? 'That link has expired or was already used. Links work once and expire after an hour. Enter your email to get a new one.'
+        : `That link didn't work (${redirect.error}). Enter your email to get a new one.`,
+    });
   },
 
   close(result = null) {
@@ -157,7 +176,7 @@ const AuthUI = {
     this.reason = reason;
     const dlg = $('#auth-dialog');
     const brand = title => `<button type="button" class="dlg-close" data-auth="close" aria-label="Close">×</button>
-      <div class="auth-brand"><img src="assets/logo.svg" alt="" width="40" height="40"><h2 class="dlg-title">${title}</h2></div>`;
+      <div class="auth-brand"><img src="assets/leaf-mascot.svg" alt="" width="44" height="44"><h2 class="dlg-title">${title}</h2></div>`;
 
     if (mode === 'confirm') {
       dlg.innerHTML = `${brand('Check your email')}
@@ -167,7 +186,9 @@ const AuthUI = {
     }
     if (mode === 'forgot' || mode === 'reset') {
       const forgot = mode === 'forgot';
+      const note = reason || (forgot ? '' : "You're signed in from your reset link. Choose a new password to finish.");
       dlg.innerHTML = `${brand(forgot ? 'Reset your password' : 'Choose a new password')}
+        ${note ? `<p class="auth-reason">${esc(note)}</p>` : ''}
         <form id="auth-form" class="stack" novalidate>
           ${forgot ? '<label>Email<input name="email" type="email" autocomplete="email" required></label>'
             : '<label>New password<input name="password" type="password" autocomplete="new-password" required minlength="6"></label>'}
@@ -215,6 +236,7 @@ const AuthUI = {
       } else if (this.mode === 'reset') {
         await Auth.setNewPassword(d.password);
         this.close(Auth.current());
+        toast("Password updated. You're logged in.");
       } else {
         this.close(await Auth.logIn(d));
       }

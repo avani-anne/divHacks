@@ -74,18 +74,11 @@ function setMapView(view) {
 
 function initMap() {
   if (map) return;
-  map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([40.71, -73.95], 11);
+  // Double-click clears the ZIP selection, so it doesn't zoom here (use +/− or the scroll wheel).
+  map = L.map('map', { zoomControl: false, preferCanvas: true, doubleClickZoom: false }).setView([40.71, -73.95], 11);
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  const streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
-  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Imagery &copy; Esri',
-  });
-  L.control.layers({ Map: streets, Satellite: satellite }, null, { position: 'topright' }).addTo(map);
+  addBasemaps(map);
   L.control.scale({ position: 'bottomright', imperial: true, metric: false }).addTo(map);
 
   map.createPane('gaps').style.zIndex = 390;
@@ -220,7 +213,7 @@ async function loadZip(zip) {
     if (token !== state.loadToken) return;
     if (!zipFeature) {
       setLoading(null);
-      $('#profile').innerHTML = `<div class="card error-card"><h2>ZIP ${esc(zip)} not found</h2><p>That doesn't look like a residential NYC ZIP code. Try another, like 10027 or 11211.</p></div>`;
+      $('#profile').innerHTML = `<div class="card error-card"><h2>ZIP ${esc(zip)} not found</h2><p>That doesn't look like a residential NYC ZIP code. Try another, like 10027 or 11211.</p>${zipForm('')}<p class="form-error" data-zip-error></p></div>`;
       return;
     }
     state.zipFeature = zipFeature;
@@ -295,7 +288,7 @@ function setLoading(text) {
 // ---------------- Profile rendering ----------------
 
 function skeletonProfile(zip) {
-  return `<div class="profile-head"><div class="kicker">Neighborhood profile</div><h2>ZIP ${esc(zip)}</h2><p class="muted">Loading…</p></div>
+  return `<div class="profile-head"><div class="profile-top"><div class="kicker">Neighborhood profile</div>${zipForm(zip)}</div><h2>ZIP ${esc(zip)}</h2><p class="muted">Loading…</p></div>
     <div class="stats">${'<div class="stat skeleton"></div>'.repeat(6)}</div>`;
 }
 
@@ -321,7 +314,7 @@ function renderProfile() {
 
   $('#profile').innerHTML = `
     <div class="profile-head">
-      <div class="kicker">Neighborhood profile</div>
+      <div class="profile-top"><div class="kicker">Neighborhood profile</div>${zipForm(m.zip)}</div>
       <h2>ZIP ${esc(m.zip)} <span class="place">${esc(placeName)}</span></h2>
       <p class="muted">${m.population ? `${fmt(m.population)} residents · ` : ''}${fmt(m.zipAcres)} acres${t?.place?.nta ? ` · ${esc(t.place.nta)}` : ''}</p>
     </div>
@@ -342,6 +335,7 @@ function renderProfile() {
         ${meter('Within a 5-minute walk of a park', m.access.within5, withProposals?.within5)}
         ${withProposals ? proposalImpactNote(proposals.length, m.access, withProposals) : ''}
         <p class="note">Turn on <em>Access gaps</em> below to see where residents are farthest from a park.</p>
+        <p class="note">Tip: click a neighboring area on the map to switch ZIPs, or double-click to clear the selection.</p>
       ` : '<p class="muted"><span class="spinner spinner-sm"></span> Measuring walking distances…</p>'}
       ${perThousand != null ? `
         <div class="goal">
@@ -404,6 +398,14 @@ function proposalImpactNote(n, before, after) {
   return `<p class="note">Your ${sites} ${n > 1 ? 'are' : 'is'} in areas that already have park access. Try placing sites in the red and yellow access gaps.</p>`;
 }
 
+// A compact "change ZIP" form, handled by the #sidebar submit listener.
+function zipForm(current) {
+  return `<form class="profile-zip" autocomplete="off" data-zip-form>
+    <input name="zip" inputmode="numeric" pattern="\\d{5}" maxlength="5" placeholder="ZIP" value="${esc(current)}" aria-label="Change ZIP code" required>
+    <button type="submit">Change ZIP</button>
+  </form>`;
+}
+
 function statTile(value, label, sub, info) {
   return `<div class="stat"${info ? ` title="${esc(info)}"` : ''}>
     <div class="stat-value">${value}</div>
@@ -435,6 +437,10 @@ function airRow(label, v, measure) {
 // ---------------- Proposal tool ----------------
 
 function setProposing(on) {
+  if (on && !state.zipFeature) {
+    toast('Pick a ZIP first: click an area on the map or enter a ZIP code.');
+    on = false;
+  }
   state.proposing = on;
   $('#propose-btn').classList.toggle('active', on);
   $('#propose-btn').textContent = on ? 'Click the map to place a site · Esc to stop' : '＋ Propose a green space';
@@ -490,6 +496,7 @@ function proposalPopup(id) {
     <textarea class="pf-notes" rows="2" placeholder="Notes (lot owner, size, community input…)">${esc(p.notes)}</textarea>
     <div class="impact impact-${verdict[2]}"><strong>${verdict[0]}</strong>${verdict[1]}</div>
     <div class="muted small">Nearest park: ${esc(nearest.name || '—')} (${Number.isFinite(d) ? `${fmt(d)} m, ~${Math.max(1, Math.round(d / 80))} min walk` : 'none nearby'})</div>
+    <a class="small sv-link" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p.lat},${p.lng}" target="_blank" rel="noopener">See it in Street View ↗</a>
     ${inside ? '' : `<div class="muted small">⚠ Outside ZIP ${esc(state.zip)}</div>`}
     <div class="pf-actions"><span class="muted small">Drag the pin to move it</span><button class="pf-delete" type="button">Delete</button></div>`;
   el.querySelector('.pf-name').addEventListener('change', e => { Proposals.update(id, { name: e.target.value.trim() || p.name }); renderProposals(); });
@@ -548,7 +555,7 @@ function exportProposals() {
 function showLanding() {
   $('#planner').hidden = true;
   $('#landing').hidden = false;
-  document.title = 'NYC Green Space Planner';
+  document.title = 'Greenify NYC';
   $('#landing-zip').focus();
 }
 
@@ -561,23 +568,75 @@ function showPlanner() {
 function route() {
   const zip = new URLSearchParams(location.hash.slice(1)).get('zip');
   if (zip && /^\d{5}$/.test(zip)) {
-    document.title = `${zip} · NYC Green Space Planner`;
+    document.title = `${zip} · Greenify NYC`;
     loadZip(zip);
+  } else if (location.hash === '#explore') {
+    showOpenMap();
   } else {
     showLanding();
   }
 }
 
+// ---------------- Selecting ZIPs from the map ----------------
+
+async function selectZipAt(latlng) {
+  if (Date.now() - (state.popupOpenedAt || 0) < 500) return;
+  const here = turf.point([latlng.lng, latlng.lat]);
+  if (state.zipFeature && turf.booleanPointInPolygon(here, state.zipFeature)) return;
+  setLoading('Finding the ZIP code here…');
+  let zip = null;
+  try {
+    zip = await Data.zipAt([latlng.lng, latlng.lat]);
+  } catch (err) {
+    console.error(err);
+  }
+  setLoading(null);
+  if (!zip) {
+    toast('No NYC ZIP code here. Click on land within the five boroughs.');
+    return;
+  }
+  submitZip(zip, null);
+}
+
+function clearZipSelection() {
+  if (location.hash === '#explore') return;
+  location.hash = 'explore';
+}
+
+// The map with no ZIP selected: no highlight or neighborhood layers, just the basemap.
+function showOpenMap() {
+  state.loadToken++;          // cancel any ZIP still loading
+  showPlanner();
+  showTab('map');
+  initMap();
+  clearTimeout(state.clickTimer);
+  setProposing(false);
+  if (state.visible.view3d) { state.visible.view3d = false; Map3D.disable(); }
+  Map3D.reset();
+  clearLayers();
+  map.closePopup();
+  Object.assign(state, { zip: null, zipFeature: null, parks: [], gardens: [], natural: [], samples: [], metrics: null });
+  $('#top-zip').value = '';
+  setLoading(null);
+  document.title = 'Map · Greenify NYC';
+  $('#profile').innerHTML = `
+    <div class="profile-head">
+      <div class="profile-top"><div class="kicker">Map</div>${zipForm('')}</div>
+      <h2>No ZIP selected</h2>
+    </div>
+    <p class="form-error" data-zip-error></p>
+    <div class="card open-map-card">
+      <div class="empty-icon">🗺️</div>
+      <p><strong>Click anywhere on the map</strong> to load that neighborhood's profile, parks and green-space data, or enter a ZIP code above.</p>
+      <p class="muted small">Tip: with a ZIP selected, click a neighboring area to switch to it, or double-click to clear the selection again.</p>
+    </div>`;
+}
+
 function submitZip(value, errorEl) {
   const zip = value.trim();
-  if (!/^\d{5}$/.test(zip)) {
-    if (errorEl) errorEl.textContent = 'Enter a 5-digit ZIP code.';
-    return;
-  }
-  if (!/^1(0[0-4]|1[0-6])\d{2}$/.test(zip)) {
-    if (errorEl) errorEl.textContent = 'That ZIP is outside New York City (NYC ZIPs start with 100–104 or 110–116).';
-    return;
-  }
+  const fail = msg => (errorEl ? (errorEl.textContent = msg) : toast(msg));
+  if (!/^\d{5}$/.test(zip)) return fail('Enter a 5-digit ZIP code.');
+  if (!/^1(0[0-4]|1[0-6])\d{2}$/.test(zip)) return fail('That ZIP is outside New York City (NYC ZIPs start with 100–104 or 110–116).');
   if (errorEl) errorEl.textContent = '';
   if (location.hash === `#zip=${zip}`) route();
   else location.hash = `zip=${zip}`;
@@ -596,8 +655,21 @@ function showTab(name) {
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
 $('#propose-btn').addEventListener('click', () => setProposing(!state.proposing));
+// Same as the "3D view" checkbox in Map layers; re-rendering the profile keeps the checkbox in sync.
+$('#map3d-btn').addEventListener('click', () => {
+  if (!state.zipFeature) return;
+  state.visible.view3d = !state.visible.view3d;
+  setProposing(false);
+  syncLayerVisibility();
+  renderProfile();
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape') setProposing(false); });
 
+$('#sidebar').addEventListener('submit', e => {
+  if (!e.target.matches('[data-zip-form]')) return;
+  e.preventDefault();
+  submitZip(e.target.zip.value, $('[data-zip-error]'));
+});
 $('#sidebar').addEventListener('change', e => {
   const key = e.target.dataset?.layer;
   if (!key) return;

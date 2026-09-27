@@ -15,6 +15,7 @@ const DATASETS = {
   busShelters: 't4f2-8md7',   // Bus Stop Shelters
   pluto: '64uk-42ks',         // PLUTO tax lots (land use 11 = vacant land)
   buildings: '5zhs-2jue',     // Building footprints with roof heights
+  facilities: 'ji82-xba5',    // City Planning Facilities Database (schools, senior centers, etc.)
 };
 
 async function soql(id, params) {
@@ -50,6 +51,17 @@ const Data = {
       properties: { zip, modzcta: r.modzcta, population: Number(r.pop_est) || 0 },
       geometry: r.the_geom,
     };
+  },
+
+  // The ZIP (MODZCTA) containing a point, or null for water, parkland without a ZIP (99999) or outside NYC.
+  async zipAt([lng, lat]) {
+    const rows = await soql(DATASETS.zips, {
+      $select: 'modzcta',
+      $where: `intersects(the_geom, 'POINT(${lng} ${lat})')`,
+      $limit: 1,
+    });
+    const zip = rows[0]?.modzcta;
+    return zip && /^\d{5}$/.test(zip) && zip !== '99999' ? zip : null;
   },
 
   async parks(bbox) {
@@ -323,5 +335,61 @@ const Data = {
       }
     }
     return { values, release };
+  },
+
+  // Street-level photos near a point from KartaView (open, CC BY-SA 4.0, no key). Keeps the
+  // closest photo from each capture sequence so the gallery shows different viewpoints.
+  async streetPhotos([lng, lat], radius = 80) {
+    const url = `https://api.openstreetcam.org/2.0/photo/?lat=${lat}&lng=${lng}&radius=${radius}&itemsPerPage=40&orderBy=distance`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`KartaView request failed: ${res.status}`);
+    const rows = (await res.json()).result?.data || [];
+    const seen = new Set();
+    const photos = [];
+    for (const r of rows) {
+      if (seen.has(r.sequenceId) || !r.fileurlLTh) continue;
+      seen.add(r.sequenceId);
+      photos.push({
+        id: r.id,
+        lat: Number(r.lat), lng: Number(r.lng),
+        heading: r.heading != null ? Number(r.heading) : null,
+        dist: Number(r.distance) || 0,
+        date: r.shotDate || r.dateAdded,
+        thumb: r.fileurlLTh,
+        full: r.fileurlProc || r.fileurlLTh,
+        link: `https://kartaview.org/details/${r.sequenceId}/${r.sequenceIndex}`,
+      });
+      if (photos.length >= 8) break;
+    }
+    return photos;
+  },
+
+  // Potential partner sites in a ZIP from NYC City Planning's Facilities Database. Only
+  // public-facing sites are included: residences (supportive housing) are left out, and the city
+  // does not publish homeless shelter addresses.
+  async partnerSites(zip) {
+    const rows = await soql(DATASETS.facilities, {
+      $select: 'uid,facname,address,zipcode,facgroup,facsubgrp,factype,opname,latitude,longitude',
+      $where: `zipcode='${zip}' AND latitude IS NOT NULL AND (facgroup='SCHOOLS (K-12)' OR facsubgrp='SENIOR SERVICES' OR factype='NURSING HOME'
+        OR factype like '%DROP-IN%' OR factype like 'HOMEBASE%' OR facsubgrp='SOUP KITCHENS AND FOOD PANTRIES')
+        AND factype != 'HOME DELIVERED MEALS'`,
+      $order: 'facname',
+      $limit: 500,
+    });
+    const kindOf = r => r.facgroup === 'SCHOOLS (K-12)' ? 'school'
+      : r.facsubgrp === 'SENIOR SERVICES' || r.factype === 'NURSING HOME' ? 'seniors'
+      : r.facsubgrp === 'SOUP KITCHENS AND FOOD PANTRIES' ? 'food'
+      : 'homeless';
+    return rows.map(r => ({
+      uid: r.uid,
+      name: r.facname,
+      address: r.address,
+      zip: r.zipcode,
+      kind: kindOf(r),
+      type: r.factype,
+      operator: r.opname,
+      lat: Number(r.latitude),
+      lng: Number(r.longitude),
+    }));
   },
 };

@@ -23,6 +23,7 @@ NYC Green Space Planner is a static web app (HTML, CSS and vanilla JS) that maps
 - `main.js`: startup (binds the account UI, wires `Auth.onChange`, calls `route()`). Must load last.
 - `advisor.js` (`Advisor`): Build Ideas tab. It has its **own** Leaflet map (`#advisor-map`), created lazily on first show.
 - `community.js` (`Community`) and `store.js` (`Store`): Community tab with three sub-views (`projects`, `map`, `volunteer`). **All community persistence goes through `Store`'s async methods, and all accounts through `Auth`.** Keep those boundaries so hosted services can replace localStorage without touching UI code. The updates feed is derived from items (`Community.activity(user)`); `Community.allItems` caches items so the avatar badge can be computed synchronously.
+- Partner sites come from the Facilities Database (`Data.partnerSites`). Items link to one via `partner_uid/name/kind/address` columns (`supabase/002_partner_sites.sql`). Keep residences (supportive housing) out of the query, and never add homeless shelter locations.
 - Proposals: drafts live in localStorage (`gsp-proposals-v1`). `Proposals.saveDraft()` inserts into the Supabase `proposals` table and returns the new uuid. Saved sites are cached in `Proposals.saved` (loaded on login) so reads stay synchronous; updates and deletes write through in the background.
 - **Security lives in the database, not the client.** RLS enforces who can read and write; triggers (`stamp_author`) set `user_id`, `organizer_id` and display names from the session. Unique constraints enforce one signature and one sign-up per account, and `Store` maps error code `23505` to a friendly message. Never put a service_role key in the client.
 - `plants.js` (`PLANTS`, `Plants.recommend`): curated plant data. Tags: `sun` ∈ full/part/shade; `spaces` ∈ treepit/busstop/lot/rooftop/yard/planter; `goals` ∈ pollinators/food/cooling/stormwater/lowcare.
@@ -44,7 +45,7 @@ NYC Green Space Planner is a static web app (HTML, CSS and vanilla JS) that maps
 - Leaflet: set a map's view **before** adding vector layers (otherwise `_clipPoints` throws "reading 'min'"), and call `invalidateSize()` after a map's container becomes visible (tabs, dialogs).
 - Colors and design tokens are CSS variables on `:root` in `css/styles.css`. Map layer colors are in `COLORS` in `app.js`.
 - Layout must work at phone width (~390 px). The main breakpoint is 820 px.
-- Basemap tiles: OpenStreetMap (`tile.openstreetmap.org`) and Esri World Imagery. CARTO tiles now need an API key, so don't switch back to them.
+- Basemaps: use `addBasemaps(map)` in `app.js` (Esri Streets / Light / Satellite, no key) for every Leaflet map. Don't use the OpenStreetMap standard style: it draws every NYC street tree as a green dot, which makes the Street trees layer look stuck on (and OSM's tile policy discourages app use). CARTO tiles need an API key.
 - nycgovparks.org returns 403 to curl and scripts. That's bot-blocking, not a dead link.
 
 ## Testing
