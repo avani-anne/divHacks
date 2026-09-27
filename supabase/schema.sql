@@ -203,3 +203,12 @@ drop policy if exists "messages readable" on public.messages;
 create policy "messages readable" on public.messages for select using (true);
 drop policy if exists "messages insert own" on public.messages;
 create policy "messages insert own" on public.messages for insert to authenticated with check (user_id = auth.uid());
+
+-- ============================================================
+-- Partner sites (also in 002_partner_sites.sql for existing projects).
+-- ============================================================
+alter table public.items add column if not exists partner_uid text;
+alter table public.items add column if not exists partner_name text;
+alter table public.items add column if not exists partner_kind text;
+alter table public.items add column if not exists partner_address text;
+create index if not exists items_partner_idx on public.items (partner_uid);

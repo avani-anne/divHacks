@@ -62,29 +62,19 @@ Google Street View is an optional map view. To enable it, add a Google Maps Plat
 
 It's a static site with no build step. Serve the folder:
 
-```sh
-python3 -m http.server 8000
-# open http://localhost:8000
-```
+**Privacy:** supportive-housing residences are left out of partner sites, and the city doesn't publish homeless shelter addresses, so they aren't shown. Volunteers' contact details are visible only to the project organizer.
 
-Link straight to a ZIP with `http://localhost:8000/#zip=10027`.
+## 🔐 Accounts
 
-## Data sources
+- **Sign up and log in** from the top bar, with **Forgot password?** reset by email, powered by Supabase Auth.
+- **You need an account to:** save proposed sites (they're private to you), start petitions and projects, sign, volunteer and post.
+- **The database enforces the rules itself,** so they hold even if someone bypasses the site:
+  - one signature and one sign-up per account
+  - names on posts come from the account and can't be faked
+  - saved sites are private
+  - volunteer contact details are visible only to the organizer
 
-| What | NYC Open Data dataset |
-| --- | --- |
-| ZIP boundaries + population | Modified ZCTA (`pri4-ifjk`) |
-| Parks | NYC Parks Properties (`enfh-gkve`) |
-| Natural areas | NYC Parks Forever Wild (`48va-85tp`) |
-| Community gardens | GreenThumb Garden Info (`p78i-pat6`) |
-| Street trees and species | 2015 Street Tree Census (`uvpi-gqnh`) |
-| Air quality | Air Quality (`c3uy-2p5r`), per community district (`5crt-au7u`) |
-| Empty street-tree beds | Forestry Planting Spaces (`82zj-84is`) |
-| Bus shelters | Bus Stop Shelters (`t4f2-8md7`) |
-| Vacant lots | PLUTO (`64uk-42ks`), land use 11 |
-| Building heights | Building footprints (`5zhs-2jue`) |
-| Median household income | Census ACS 5-year, table B19013, by ZIP, via the [Census Reporter API](https://censusreporter.org/) (no key needed) |
-| 3D buildings and basemap | [OpenFreeMap](https://openfreemap.org/) vector tiles (no key needed) |
+---
 
 ## How the numbers are calculated
 
@@ -99,10 +89,36 @@ Link straight to a ZIP with `http://localhost:8000/#zip=10027`.
 ## Known limitations
 
 - **Tree data is from 2015.** It's the only tree dataset recorded by ZIP code, and it covers street trees only.
-- **Air quality is by community district,** not by ZIP code.
-- **Sunlight and carbon figures are estimates,** and the site labels them that way.
+- **Coarse areas:** air quality is reported by community district and income by ZIP code.
+- **Estimates:** sunlight and carbon figures are estimates, and the site labels them that way.
+- **Street photos** come from volunteers and may be several years old.
+- **Vacant-lot data can lag reality:** some lots may now be parking or construction.
 - **Updates appear in the app only.** Email or text alerts would need a scheduled server function.
-- **Air quality is reported for community districts,** and income for ZIP codes, so both are coarse.
+
+---
+
+## Run it locally
+
+It's a static site with no build step:
+
+```sh
+python3 -m http.server 8765
+# open http://localhost:8765
+```
+
+## Set up Supabase (once)
+
+1. Create a Supabase project.
+2. In the **SQL Editor**, paste and run the contents of [`supabase/schema.sql`](supabase/schema.sql). It creates the tables, triggers and access rules, and is safe to re-run. For projects created before partner sites were added, also run [`supabase/002_partner_sites.sql`](supabase/002_partner_sites.sql).
+3. Put the project URL and **publishable key** in [`js/config.js`](js/config.js). Never use the secret or service_role key in the site.
+4. Under **Authentication → URL Configuration**:
+   - set **Site URL** to the live address
+   - add every address the site runs on to **Redirect URLs**, e.g. `https://greenify-nyc.vercel.app/**` and `http://localhost:8765/**`
+5. Optional: turn off **Confirm email** so new accounts can log in straight away. Supabase's built-in email is heavily rate-limited, so set up your own email provider (SMTP) before relying on confirmation emails.
+
+## Deploy
+
+The site is deployed on **Vercel** from this GitHub repo, with no build command and the output in the repo root. Every push to `main` redeploys. It also works on any static host, such as GitHub Pages or Netlify.
 
 ## Project structure
 
@@ -125,11 +141,12 @@ js/community.js     Community tab: petitions, growing map, volunteering and upda
 js/main.js          Startup
 ```
 
-Libraries (loaded from CDNs): [Leaflet](https://leafletjs.com/) for 2D maps, [MapLibre GL](https://maplibre.org/) for the 3D view, and [Turf.js](https://turfjs.org/) for geometry. Basemaps are from OpenStreetMap, OpenFreeMap and Esri World Imagery.
+Libraries (loaded from CDNs): [Leaflet](https://leafletjs.com/) for 2D maps, [MapLibre GL](https://maplibre.org/) for 3D, [Turf.js](https://turfjs.org/) for geometry, and [supabase-js](https://supabase.com/docs/reference/javascript) for accounts and data. Fonts: DM Sans, Fraunces and Dancing Script (Google Fonts).
 
 ## Next steps
 
-- **Live updates:** subscribe to Supabase Realtime on `messages` and `signatures` so discussions update without a refresh.
-- **Email updates:** send the updates-feed events as email digests from a scheduled Supabase Edge Function.
-- **Free-text questions in Build Ideas:** a small backend calling the Claude API could answer open-ended questions using the same site data.
-- **Newer tree data:** switch tree counts to the live Forestry Tree Points dataset with a spatial query, instead of the 2015 census.
+- **Organization accounts,** so schools, senior centers and shelters can post their own volunteer needs.
+- **Live updates** through Supabase Realtime, so discussions and signatures update without a refresh.
+- **Email digests** of the updates feed, from a scheduled Supabase Edge Function.
+- **Free-text questions in Build Ideas,** answered with the Claude API using the same site data.
+- **Newer tree data** from the live Forestry Tree Points dataset instead of the 2015 census.

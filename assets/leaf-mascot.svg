@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2250 -2350 4500 4650" role="img" aria-label="Greenify leaf mascot">
+  <defs>
+    <linearGradient id="leafFill" x1="0" y1="-2000" x2="0" y2="2030" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b5e889"/>
+      <stop offset="1" stop-color="#5cbf63"/>
+    </linearGradient>
+  </defs>
+  <!-- Maple leaf (public-domain Flag of Canada leaf), rounded off with a thick same-color stroke -->
+  <path fill="url(#leafFill)" stroke="url(#leafFill)" stroke-width="220" stroke-linejoin="round"
+    d="m-90 2030 45-863a95 95 0 0 0-111-98l-859 151 116-320a65 65 0 0 0-20-73l-941-762 212-99a65 65 0 0 0 34-79l-186-572 542 115a65 65 0 0 0 73-38l105-247 423 454a65 65 0 0 0 111-57l-204-1052 327 189a65 65 0 0 0 91-27l332-652 332 652a65 65 0 0 0 91 27l327-189-204 1052a65 65 0 0 0 111 57l423-454 105 247a65 65 0 0 0 73 38l542-115-186 572a65 65 0 0 0 34 79l212 99-941 762a65 65 0 0 0-20 73l116 320-859-151a95 95 0 0 0-111 98l45 863z"/>
+  <!-- Cheeks -->
+  <ellipse cx="-720" cy="300" rx="180" ry="115" fill="#ff8fa3" opacity=".55"/>
+  <ellipse cx="720" cy="300" rx="180" ry="115" fill="#ff8fa3" opacity=".55"/>
+  <!-- Eyes: small, round and black, with two sparkles for a friendly look -->
+  <ellipse cx="-440" cy="-40" rx="165" ry="190" fill="#111"/>
+  <ellipse cx="440" cy="-40" rx="165" ry="190" fill="#111"/>
+  <circle cx="-385" cy="-110" r="62" fill="#fff"/>
+  <circle cx="495" cy="-110" r="62" fill="#fff"/>
+  <circle cx="-480" cy="40" r="28" fill="#fff" opacity=".85"/>
+  <circle cx="400" cy="40" r="28" fill="#fff" opacity=".85"/>
+  <!-- Smile -->
+  <path d="M-280 360 Q0 640 280 360" fill="none" stroke="#111" stroke-width="105" stroke-linecap="round"/>
+</svg>
