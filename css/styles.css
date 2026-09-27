@@ -662,3 +662,16 @@ a { color: var(--green-700); }
 }
 .map-view-switch button[aria-pressed="true"] { background: var(--green-800); color: #fff; }
 .map-view-switch button:focus-visible { outline: 2px solid var(--green-700); outline-offset: 2px; }
+
+/* ---------- Text alerts ---------- */
+.sms-box { border: 1.5px solid var(--line) !important; border-radius: 12px; padding: 10px 12px 8px !important; background: var(--paper); }
+.sms-box legend { padding: 0 4px; }
+.sms-box .consent { margin: 2px 0 0; line-height: 1.4; font-size: .74rem; }
+
+/* ---------- Live air quality ---------- */
+.aqi-vbad { background: #8f3f97; }
+.aqi-hazard { background: #7e0023; }
+.air-now { display: flex; gap: 12px; align-items: center; margin: 4px 0 6px; }
+.air-now .aqi-badge { font-size: 1.4rem; font-weight: 700; padding: 4px 12px; }
+.air-now div { display: flex; flex-direction: column; }
+.air-sub { font-weight: 700; font-size: .86rem; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }

@@ -38,14 +38,15 @@
   - **Parks** and **natural areas** (the protected "Forever Wild" areas behind the NYC Nature Map)
   - **Community gardens** and **street trees**
   - **Access gaps:** the parts of the ZIP more than a 5- or 10-minute walk from a usable park
-  - **Air quality:** fine-particle pollution (PM2.5) by community district
+  - **Air quality now:** live US AQI, updated hourly (regional model, about 10 km areas)
+  - **Air pollution, yearly average:** fine-particle pollution (PM2.5) by community district, the best source for comparing neighborhoods
   - **Median income:** household income by ZIP
   - **3D view:** tilted 3D buildings with parks, gardens and your sites.
 - **Map | 3D | Street View** switch on the map. **Street View** opens Google Street View at the map's center, so you can walk the streets like in Google Maps. It needs a Google Maps API key in `js/config.js` (see below).
 - **Neighborhood profile** in the sidebar:
   - plant (street-tree) species, street trees, and estimated CO₂ captured per year
   - green space in acres and as a share of the ZIP
-  - air quality index, and PM2.5, NO₂ and ozone readings
+  - **air quality right now** (live US AQI, PM2.5, ozone and NO₂), plus yearly neighborhood averages
   - number of community gardens
   - share of the ZIP within a 5- and 10-minute walk of a park
   - park acres per 1,000 residents, against the city's 2.5-acre goal
@@ -65,7 +66,8 @@
 | Natural areas | NYC Parks Forever Wild, `48va-85tp` (the NYC Nature Map's natural-areas data) |
 | Community gardens | GreenThumb Garden Info, `p78i-pat6` |
 | Street trees, species, CO₂ estimate | 2015 Street Tree Census, `uvpi-gqnh` |
-| Air quality | NYC Air Quality, `c3uy-2p5r`, joined to Community Districts, `5crt-au7u` |
+| Air quality now (live) | [Open-Meteo air-quality API](https://open-meteo.com/en/docs/air-quality-api) (Copernicus CAMS model), updated hourly, no key |
+| Air pollution, yearly average | NYC Air Quality, `c3uy-2p5r`, joined to Community Districts, `5crt-au7u` |
 | Median household income | Census ACS 5-year (2020–2024), table B19013, via the [Census Reporter API](https://censusreporter.org/) |
 | Background maps | Esri World Street Map, Light Gray Canvas and World Imagery |
 | 3D buildings | [OpenFreeMap](https://openfreemap.org/) vector tiles, drawn with MapLibre GL |
@@ -120,6 +122,7 @@ Four sections. You can browse everything without an account; starting, signing, 
    - Open volunteer opportunities in the ZIP, with one-click sign-up.
    - Petitions that need signatures.
    - Your **volunteer profile**: ZIP codes you follow, interests, availability, and which updates you want.
+   - **📱 Text alerts:** enter a US mobile number and opt in. You'll get a confirmation text: "Thank you for signing up for notifications for Greenify NYC. You are entered for ZIP code XXXXX." It's sent through Twilio from a Supabase Edge Function (see setup below).
    - An **updates feed** (also under 🔔 in the account menu): new projects and petitions in followed ZIPs, reminders before projects you joined, new volunteers on your projects, petition milestones and discussion replies.
    - Links to official programs: NYC Parks volunteering, GreenThumb, NYC Service and Trees New York.
 
@@ -186,6 +189,20 @@ python3 -m http.server 8765
    - add every address the site runs on to **Redirect URLs**, e.g. `https://greenify-nyc.vercel.app/**` and `http://localhost:8765/**`
 5. Optional: turn off **Confirm email** so new accounts can log in straight away. Supabase's built-in email is heavily rate-limited, so set up your own email provider (SMTP) before relying on confirmation emails.
 
+## Set up text alerts (optional)
+
+Texts are sent by the `send-welcome-sms` Supabase Edge Function through [Twilio](https://www.twilio.com). The Twilio credentials live only in Supabase secrets, never in the site.
+
+1. Run [`supabase/003_sms_alerts.sql`](supabase/003_sms_alerts.sql) in the SQL Editor. It adds the `sms_log` table, used to limit each account to 3 texts a day.
+2. In Twilio:
+   - create an account and get a phone number
+   - note the **Account SID** and **Auth Token**
+   - on a trial account, verify the phone numbers you'll text
+3. In Supabase → **Edge Functions**, deploy a new function named `send-welcome-sms` with the code from [`supabase/functions/send-welcome-sms/index.ts`](supabase/functions/send-welcome-sms/index.ts). Keep JWT verification on.
+4. In Supabase → **Edge Functions → Secrets**, add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM_NUMBER` (the Twilio number in `+1…` format).
+
+Texting the public in the US also requires registering your sender with Twilio (A2P 10DLC or toll-free verification), which can take days.
+
 ## Set up Street View (optional)
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), enable the **Maps JavaScript API** and create an API key. A billing account is required, though there's a free monthly allowance.
@@ -216,6 +233,8 @@ js/community.js         Community tab: petitions, growing map, partner sites, vo
 js/main.js              Startup
 supabase/schema.sql     Database tables, triggers and access rules
 supabase/002_partner_sites.sql  Migration adding partner-site fields
+supabase/003_sms_alerts.sql     Migration adding the text-alert log
+supabase/functions/send-welcome-sms/  Edge Function that sends the confirmation text (Twilio)
 ```
 
 Libraries (loaded from CDNs): [Leaflet](https://leafletjs.com/) for 2D maps, [MapLibre GL](https://maplibre.org/) for 3D, [Turf.js](https://turfjs.org/) for geometry, and [supabase-js](https://supabase.com/docs/reference/javascript) for accounts and data. Fonts: DM Sans, Fraunces and Dancing Script (Google Fonts).

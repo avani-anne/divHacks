@@ -107,11 +107,14 @@ const Analysis = {
     return Math.round(((iHi - iLo) / (cHi - cLo)) * (v - cLo) + iLo);
   },
 
+  // EPA AQI categories.
   aqiCategory(aqi) {
     if (aqi <= 50) return { label: 'Good', tone: 'good' };
     if (aqi <= 100) return { label: 'Moderate', tone: 'moderate' };
     if (aqi <= 150) return { label: 'Unhealthy for sensitive groups', tone: 'usg' };
-    return { label: 'Unhealthy', tone: 'bad' };
+    if (aqi <= 200) return { label: 'Unhealthy', tone: 'bad' };
+    if (aqi <= 300) return { label: 'Very unhealthy', tone: 'vbad' };
+    return { label: 'Hazardous', tone: 'hazard' };
   },
 
   // Estimates growing-season sunlight from the buildings around a point. In NYC (40.7°N) the noon

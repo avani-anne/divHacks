@@ -21,6 +21,12 @@ const AIR_SCALE = {
   colors: ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000'],
   labels: ['< 6', '6–6.5', '6.5–7', '7–8', '8+'],
 };
+// EPA AQI colors (softened slightly for the map).
+const AQI_SCALE = {
+  breaks: [51, 101, 151, 201, 301],
+  colors: ['#3fbf5f', '#f2d635', '#f28c28', '#e0413a', '#8f3f97', '#7e0023'],
+  labels: ['0–50 Good', '51–100 Moderate', '101–150 Sensitive', '151–200 Unhealthy', '201–300 Very unhealthy', '301+ Hazardous'],
+};
 const INCOME_SCALE = {
   breaks: [40000, 60000, 90000, 130000],
   colors: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
@@ -41,7 +47,7 @@ const state = {
   samples: [],
   metrics: null,
   layers: {},
-  visible: { parks: true, natural: true, gardens: true, trees: false, gaps: false, airquality: false, income: false, view3d: false },
+  visible: { parks: true, natural: true, gardens: true, trees: false, gaps: false, airnow: false, airquality: false, income: false, view3d: false },
   pendingOpen: null,
   proposing: false,
   loadToken: 0,
@@ -276,8 +282,9 @@ function drawGapLayer() {
 async function syncLayerVisibility() {
   if (state.visible.trees) await ensureTreeLayer();
   if (state.visible.airquality) await ensureAirLayer();
+  if (state.visible.airnow) await ensureAirNowLayer();
   if (state.visible.income) await ensureIncomeLayer();
-  for (const key of ['parks', 'natural', 'gardens', 'trees', 'gaps', 'airquality', 'income']) {
+  for (const key of ['parks', 'natural', 'gardens', 'trees', 'gaps', 'airnow', 'airquality', 'income']) {
     const layer = state.layers[key];
     if (!layer) continue;
     if (state.visible[key] && !map.hasLayer(layer)) layer.addTo(map);
@@ -323,6 +330,39 @@ function popupInsideZip(layer, html) {
     if (!state.zipFeature || !turf.booleanPointInPolygon(turf.point([e.latlng.lng, e.latlng.lat]), state.zipFeature)) return;
     L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
   });
+}
+
+// Live AQI sampled on a grid over the area (one Open-Meteo request for all points).
+async function ensureAirNowLayer() {
+  if (state.layers.airnow) return;
+  const token = state.loadToken;
+  setLoading('Loading live air quality…');
+  try {
+    const [minX, minY, maxX, maxY] = overlayBbox();
+    const step = 0.03;
+    const points = [];
+    for (let x = minX; x < maxX; x += step) for (let y = minY; y < maxY; y += step) points.push([x + step / 2, y + step / 2]);
+    const readings = await Data.currentAir(points.slice(0, 60));
+    if (token !== state.loadToken) return;
+    state.airNowTime = readings[0]?.time;
+    state.layers.airnow = L.layerGroup(readings.filter(r => r.aqi != null).map(r => {
+      const [x, y] = r.point;
+      const cell = L.rectangle([[y - step / 2, x - step / 2], [y + step / 2, x + step / 2]], {
+        pane: 'choropleth', color: '#fff', weight: 0.5, fillColor: scaleColor(AQI_SCALE, r.aqi), fillOpacity: 0.45,
+      });
+      const cat = Analysis.aqiCategory(r.aqi);
+      popupInsideZip(cell, `<div class="pop"><div class="pop-kicker">Air quality now · ${esc(airTime(r.time))}</div><strong>US AQI ${r.aqi}: ${esc(cat.label)}</strong>
+        <div>PM2.5 ${fmt(r.pm25, 1)} · Ozone ${fmt(r.ozone, 0)} · NO₂ ${fmt(r.no2, 1)} <span class="muted">µg/m³</span></div>
+        <div class="muted small">Open-Meteo / CAMS regional model</div></div>`);
+      return cell;
+    }));
+  } catch (err) {
+    console.error(err);
+    state.visible.airnow = false;
+    toast("Couldn't load live air quality right now.");
+  } finally {
+    setLoading(null);
+  }
 }
 
 async function ensureIncomeLayer() {
@@ -384,13 +424,14 @@ async function loadZip(zip) {
     const interior = turf.pointOnFeature(zipFeature).geometry.coordinates;
 
     setLoading('Loading parks, gardens, trees and air quality…');
-    const [parks, natural, gardens, trees, cd, income] = await Promise.all([
+    const [parks, natural, gardens, trees, cd, income, airNow] = await Promise.all([
       Data.parks(bbox),
       Data.naturalAreas(bbox).catch(() => []),
       Data.gardens(zip, bbox).catch(() => []),
       Data.treeSummary(zip).catch(() => null),
       Data.communityDistrict(interior).catch(() => null),
       Data.medianIncome([zipFeature.properties.modzcta]).catch(() => null),
+      Data.currentAir([interior]).then(r => r[0]).catch(() => null),
     ]);
     const air = await Data.airQuality(cd).catch(() => null);
     if (token !== state.loadToken) return;
@@ -414,6 +455,7 @@ async function loadZip(zip) {
     state.metrics = {
       zip, trees, air, population, zipAcres, parkAcres, naturalAcres,
       income: income?.values[zipFeature.properties.modzcta] || null,
+      airNow,
       incomeRelease: income?.release || null,
       parkCount: parksInZip.length,
       gardenCount: gardensInZip.length,
@@ -467,11 +509,15 @@ function renderProfile() {
   const perThousand = m.population ? (m.parkAcres / m.population) * 1000 : null;
   const co2 = t ? Analysis.co2TonsPerYear(t.count) : null;
 
-  let aqiTile = statTile('—', 'Air quality index', 'No data for this district');
-  if (m.air?.pm25) {
+  let aqiTile = statTile('—', 'Air quality now', 'Live reading unavailable');
+  if (m.airNow?.aqi != null) {
+    const cat = Analysis.aqiCategory(m.airNow.aqi);
+    aqiTile = statTile(`<span class="aqi-badge aqi-${cat.tone}">${m.airNow.aqi}</span>`, 'Air quality now', `${cat.label} · as of ${airTime(m.airNow.time)}`,
+      'US AQI right now, updated hourly, from the Open-Meteo / CAMS air-quality model. It covers roughly 10 km areas, so it shows the air across this part of the city, not block by block.');
+  } else if (m.air?.pm25) {
     const aqi = Analysis.pm25ToAqi(m.air.pm25.value);
     const cat = Analysis.aqiCategory(aqi);
-    aqiTile = statTile(`<span class="aqi-badge aqi-${cat.tone}">${aqi}</span>`, 'Air quality index', `${cat.label} · from ${m.air.pm25.period} PM2.5`);
+    aqiTile = statTile(`<span class="aqi-badge aqi-${cat.tone}">${aqi}</span>`, 'Air quality (yearly)', `${cat.label} · ${m.air.pm25.period} average`);
   }
 
   const proposals = Proposals.forZip(m.zip);
@@ -519,7 +565,9 @@ function renderProfile() {
         ${layerToggle('gardens', COLORS.garden, 'Community gardens', `${fmt(m.gardenCount)} in ZIP`, true)}
         ${layerToggle('trees', COLORS.tree, 'Street trees', t ? `${fmt(t.count)} trees` : '', true)}
         ${layerToggle('gaps', `linear-gradient(90deg, ${COLORS.gap5} 50%, ${COLORS.gap10} 50%)`, 'Access gaps', '5–10 min · 10+ min to a park')}
-        ${layerToggle('airquality', `linear-gradient(90deg, ${AIR_SCALE.colors.join(',')})`, 'Air quality', 'Fine particles (PM2.5) by community district')}
+        ${layerToggle('airnow', `linear-gradient(90deg, ${AQI_SCALE.colors.slice(0, 4).join(',')})`, 'Air quality now', m.airNow?.aqi != null ? `AQI ${m.airNow.aqi} · live, updated hourly` : 'Live US AQI, updated hourly')}
+        ${state.visible.airnow ? legend(AQI_SCALE, `US AQI as of ${airTime(state.airNowTime || m.airNow?.time)} (regional model, ~10 km)`) : ''}
+        ${layerToggle('airquality', `linear-gradient(90deg, ${AIR_SCALE.colors.join(',')})`, 'Air pollution, yearly average', 'PM2.5 by community district (NYC survey)')}
         ${state.visible.airquality ? legend(AIR_SCALE, 'PM2.5, µg/m³ annual mean') : ''}
         ${layerToggle('income', `linear-gradient(90deg, ${INCOME_SCALE.colors.join(',')})`, 'Median income', m.income ? `${money(m.income.income)} in this ZIP` : 'Household income by ZIP')}
         ${state.visible.income ? legend(INCOME_SCALE, `Median household income, ACS ${state.incomeRelease || m.incomeRelease || ''}`) : ''}
@@ -539,15 +587,28 @@ function renderProfile() {
       <ul class="rank">${t.top.map(s => `<li><span class="cap">${esc(s.name)}</span><strong>${fmt(s.count)}</strong></li>`).join('')}</ul>
     </section>` : ''}
 
-    ${m.air ? `
+    ${m.airNow || m.air ? `
     <section class="card">
       <h3>Air quality</h3>
-      <p class="muted small">${esc(m.air.district)}</p>
-      <dl class="air">
-        ${airRow('Fine particles (PM2.5)', m.air.pm25, 'annual mean')}
-        ${airRow('Nitrogen dioxide (NO₂)', m.air.no2, 'annual mean')}
-        ${airRow('Ozone (O₃)', m.air.o3, 'summer mean')}
-      </dl>
+      ${m.airNow?.aqi != null ? `
+        <div class="air-now">
+          <span class="aqi-badge aqi-${Analysis.aqiCategory(m.airNow.aqi).tone}">${m.airNow.aqi}</span>
+          <div><strong>Right now: ${esc(Analysis.aqiCategory(m.airNow.aqi).label)}</strong><span class="muted small">US AQI as of ${esc(airTime(m.airNow.time))} · updates hourly</span></div>
+        </div>
+        <dl class="air">
+          ${nowRow('Fine particles (PM2.5)', m.airNow.pm25, 'µg/m³')}
+          ${nowRow('Ozone (O₃)', m.airNow.ozone, 'µg/m³')}
+          ${nowRow('Nitrogen dioxide (NO₂)', m.airNow.no2, 'µg/m³')}
+        </dl>
+        <p class="muted small">Live data: Open-Meteo / Copernicus CAMS model (about 10 km areas).</p>` : ''}
+      ${m.air ? `
+        <div class="air-sub">Yearly average for ${esc(m.air.district)}</div>
+        <dl class="air">
+          ${airRow('Fine particles (PM2.5)', m.air.pm25, 'annual mean')}
+          ${airRow('Nitrogen dioxide (NO₂)', m.air.no2, 'annual mean')}
+          ${airRow('Ozone (O₃)', m.air.o3, 'summer mean')}
+        </dl>
+        <p class="muted small">NYC Community Air Survey. This is the best source for comparing neighborhoods.</p>` : ''}
     </section>` : ''}
 
     <section class="card" id="proposals-card"></section>
@@ -603,6 +664,19 @@ function layerToggle(key, color, label, sub, dot) {
 function legend(scale, title) {
   return `<div class="legend"><div class="legend-title">${esc(title)}</div><div class="legend-row">${scale.colors.map((c, i) =>
     `<span><i style="background:${c}"></i>${esc(scale.labels[i])}</span>`).join('')}</div></div>`;
+}
+
+function nowRow(label, value, unit) {
+  if (value == null) return '';
+  return `<div><dt>${esc(label)}</dt><dd>${fmt(value, 1)} <small>${esc(unit)} · now</small></dd></div>`;
+}
+
+// "2026-09-26T22:00" → "10 PM"
+function airTime(t) {
+  if (!t) return 'the latest hour';
+  const [, hh] = String(t).split('T');
+  const h = Number(hh?.slice(0, 2));
+  return Number.isFinite(h) ? `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}` : t;
 }
 
 function airRow(label, v, measure) {
@@ -910,10 +984,11 @@ $('#sidebar').addEventListener('change', e => {
   if (!key) return;
   state.visible[key] = e.target.checked;
   // Air quality and income both shade whole areas, so show one at a time.
-  if (e.target.checked && key === 'airquality') state.visible.income = false;
-  if (e.target.checked && key === 'income') state.visible.airquality = false;
+  // Area-shading layers cover the same ground, so show one at a time.
+  const SHADING = ['airnow', 'airquality', 'income'];
+  if (e.target.checked && SHADING.includes(key)) SHADING.filter(k => k !== key).forEach(k => { state.visible[k] = false; });
   syncLayerVisibility().then(() => {
-    if (key === 'airquality' || key === 'income') renderProfile();
+    if (['airnow', 'airquality', 'income'].includes(key)) renderProfile();
     if (key === 'view3d') $('#propose-btn').hidden = state.visible.view3d;
   });
 });
