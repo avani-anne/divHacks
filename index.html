@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NYC Green Space Planner</title>
-  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <title>Greenify NYC</title>
+  <link rel="icon" href="assets/leaf-mascot.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght@9..144,600&family=Pacifico&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -17,8 +17,19 @@
   <section id="landing" class="landing">
     <div class="landing-card">
       <div class="brand brand-lg">
-        <img src="assets/logo.svg" alt="" class="brand-icon">
-        <h1>NYC Green Space Planner</h1>
+        <!-- Logo: a maple leaf with "greenify" in script cutting across it. Inline so it can use the page's Pacifico font. -->
+        <svg class="logo" viewBox="-3300 -2250 6600 4450" aria-hidden="true">
+          <defs>
+            <linearGradient id="logoLeaf" x1="0" y1="-2000" x2="0" y2="2030" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#8fd46a"/>
+              <stop offset="1" stop-color="#2f8a45"/>
+            </linearGradient>
+          </defs>
+          <path fill="url(#logoLeaf)" stroke="#1f5e36" stroke-width="90" stroke-linejoin="round" d="m-90 2030 45-863a95 95 0 0 0-111-98l-859 151 116-320a65 65 0 0 0-20-73l-941-762 212-99a65 65 0 0 0 34-79l-186-572 542 115a65 65 0 0 0 73-38l105-247 423 454a65 65 0 0 0 111-57l-204-1052 327 189a65 65 0 0 0 91-27l332-652 332 652a65 65 0 0 0 91 27l327-189-204 1052a65 65 0 0 0 111 57l423-454 105 247a65 65 0 0 0 73 38l542-115-186 572a65 65 0 0 0 34 79l212 99-941 762a65 65 0 0 0-20 73l116 320-859-151a95 95 0 0 0-111 98l45 863z"/>
+          <path d="M-60 1900 L-60 -1500 M-60 300 L-1300 -700 M-60 300 L1200 -700 M-60 900 L-1200 700 M-60 900 L1100 700" stroke="#1f5e36" stroke-width="60" stroke-linecap="round" opacity=".35" fill="none"/>
+          <text class="logo-word" x="0" y="520" text-anchor="middle" transform="rotate(-9)">greenify</text>
+        </svg>
+        <h1><span class="sr-only">Greenify: </span>NYC Green Space Planner</h1>
       </div>
       <p class="tagline">See every park, garden, street tree and natural area in a neighborhood. Then find the gaps and plan where new green space should go.</p>
 
@@ -51,9 +62,9 @@
   <!-- ============ Planner ============ -->
   <section id="planner" class="planner" hidden>
     <header class="topbar">
-      <a href="#" id="home-link" class="brand brand-sm">
-        <img src="assets/logo.svg" alt="" class="brand-icon">
-        <span>NYC Green Space Planner</span>
+      <a href="#" id="home-link" class="brand brand-sm" aria-label="Greenify NYC home">
+        <img src="assets/leaf-mascot.svg" alt="" class="brand-icon mascot">
+        <span class="wordmark">greenify</span>
       </a>
       <nav class="tabs" role="tablist" aria-label="Views">
         <button type="button" role="tab" class="tab" data-tab="map" aria-selected="true">Map</button>
@@ -75,24 +86,27 @@
       </aside>
       <div class="map-wrap">
         <div id="map"></div>
-        <div id="map3d" hidden></div>
+        <div id="map3d" class="map3d" hidden></div>
         <div id="map-loading" class="map-loading" hidden><span class="spinner"></span><span id="loading-text">Loading…</span></div>
         <button id="propose-btn" class="propose-btn" type="button">＋ Propose a green space</button>
+        <button id="map3d-btn" class="toggle-3d" type="button">🏙️ 3D view</button>
       </div>
     </div>
 
     <div class="workspace" data-panel="build" role="tabpanel" hidden>
       <aside class="sidebar advisor-panel" id="advisor-panel"></aside>
-      <div class="map-wrap"><div id="advisor-map"></div></div>
+      <div class="map-wrap" id="advisor-wrap"><div id="advisor-map"></div><div id="advisor-map3d" class="map3d" hidden></div></div>
     </div>
 
     <div class="tab-panel" data-panel="community" role="tabpanel" hidden>
       <div id="community-panel"></div>
     </div>
-    <dialog id="community-dialog" class="dialog"></dialog>
-    <dialog id="auth-dialog" class="dialog dialog-sm"></dialog>
-    <div id="toast" class="toast" role="status" hidden></div>
   </section>
+
+  <!-- Outside #planner so they also work on the landing page (e.g. password-reset links). -->
+  <dialog id="community-dialog" class="dialog"></dialog>
+  <dialog id="auth-dialog" class="dialog dialog-sm"></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js"></script>
